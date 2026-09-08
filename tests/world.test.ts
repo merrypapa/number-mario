@@ -3,6 +3,7 @@ import { TILE } from '../src/core/constants';
 import { Input } from '../src/core/input';
 import { Tile, getTile } from '../src/engine/tilemap';
 import { World } from '../src/game/world';
+import { numberStats } from '../src/game/shapes';
 import type { LevelDef } from '../src/game/levels/data';
 
 function makeWorld(rows: string[]) {
@@ -155,17 +156,19 @@ describe('월드 통합', () => {
     expect(world.player.shieldTime).toBe(0);
   });
 
-  it('아이템 블록을 치면 사용 상태가 되고 아이템이 나온다', () => {
+  it('아이템 블록을 치면 사용 상태가 되고 내용물이 나온다', () => {
     const { world } = makeWorld([
       ' ?  ',
       '    ',
       ' P  ',
       '####',
     ]);
-    const before = world.items.length;
     world.bumpTile(1, 0, world.player);
     expect(getTile(world.map, 1, 0)).toBe(Tile.Used);
-    expect(world.items.length).toBe(before + 1);
+    expect(world.coins).toBe(1);
+    // 이미 사용한 블록은 다시 나오지 않는다
+    world.bumpTile(1, 0, world.player);
+    expect(world.coins).toBe(1);
   });
 
   it('오브가 든 블록(!)에서는 플러스 오브가 나온다', () => {
@@ -177,6 +180,62 @@ describe('월드 통합', () => {
     ]);
     world.bumpTile(1, 0, world.player);
     expect(world.items.some((i) => i.kind === 'orb')).toBe(true);
+  });
+
+  it('블록에서 나온 오브는 공중에 멈추지 않고 주울 수 있는 곳까지 굴러떨어진다', () => {
+    // 블록이 지면에서 4칸 위 — 오브가 블록 위에 그대로 있으면 닿을 수 없다
+    const { world } = makeWorld([
+      '          ',
+      '          ',
+      ' !        ',
+      '          ',
+      '          ',
+      '          ',
+      ' P        ',
+      '##########',
+    ]);
+    const input = new Input();
+    step(world, input, 10);
+    world.bumpTile(1, 2, world.player);
+    const orb = world.items.find((i) => i.kind === 'orb')!;
+    expect(orb).toBeDefined();
+    expect(orb.physics).toBe(true);
+    step(world, input, 180);
+    // 지면(7행) 위에 멈춰 있어야 한다
+    expect(orb.physics).toBe(false);
+    expect(orb.box.y + orb.box.h).toBeCloseTo(7 * TILE, 1);
+
+    // 그리고 실제로 플레이어 점프 높이 안에 있다
+    const stats = numberStats(world.player.number);
+    const reach = (stats.jumpVel * stats.jumpVel) / (2 * stats.gravity);
+    const orbTopAboveGround = 7 * TILE - orb.box.y;
+    expect(orbTopAboveGround).toBeLessThan(reach + stats.heightPx);
+  });
+
+  it('아이템 블록의 코인은 한 번만 계산된다', () => {
+    const { world } = makeWorld([
+      ' ?  ',
+      '    ',
+      ' P  ',
+      '####',
+    ]);
+    world.bumpTile(1, 0, world.player);
+    expect(world.coins).toBe(1);
+    // 주울 수 있는 코인 아이템이 남지 않는다(중복 획득 방지)
+    expect(world.items.some((i) => i.kind === 'coin')).toBe(false);
+    const input = new Input();
+    step(world, input, 60);
+    expect(world.coins).toBe(1);
+  });
+
+  it('모든 숫자가 지면 4칸 위 아이템 블록에 머리가 닿는다', () => {
+    for (let n = 1; n <= 10; n++) {
+      const stats = numberStats(n);
+      const reach = (stats.jumpVel * stats.jumpVel) / (2 * stats.gravity);
+      // 지면 위 4칸 지점이 블록 밑면. 서 있을 때 머리에서 거기까지의 거리
+      const need = 4 * TILE - stats.heightPx;
+      expect(reach, `숫자 ${n}`).toBeGreaterThan(need);
+    }
   });
 
   it('작은 숫자는 벽돌을 부수지 못한다', () => {

@@ -13,7 +13,7 @@ export const MAX_FRAME_DT = 0.25;
 /* ── 물리 기본값 ───────────────────────────────────────── */
 export const GRAVITY_BASE = 1500;
 export const MOVE_SPEED_BASE = 168;
-export const JUMP_VEL_BASE = 470;
+export const JUMP_VEL_BASE = 495;
 export const MAX_FALL_SPEED = 780;
 export const GROUND_ACCEL = 1250;
 export const AIR_ACCEL = 760;

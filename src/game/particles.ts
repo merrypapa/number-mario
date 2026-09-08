@@ -79,6 +79,38 @@ export class ParticleSystem {
     });
   }
 
+  /** 아이템 블록에서 코인이 튀어나오는 연출 */
+  coinPop(x: number, y: number): void {
+    this.push({
+      x,
+      y: y - 6,
+      vx: 0,
+      vy: -260,
+      life: 0.55,
+      maxLife: 0.55,
+      size: 6,
+      color: COLORS.coin,
+      gravity: 900,
+      kind: 'circle',
+      fade: true,
+    });
+    for (let i = 0; i < 5; i++) {
+      this.push({
+        x,
+        y: y - 4,
+        vx: (Math.random() - 0.5) * 70,
+        vy: -120 - Math.random() * 90,
+        life: 0.45,
+        maxLife: 0.45,
+        size: 2,
+        color: '#ffe98a',
+        gravity: 700,
+        kind: 'circle',
+        fade: true,
+      });
+    }
+  }
+
   debris(x: number, y: number, color: string): void {
     const speeds = [
       [-90, -260],

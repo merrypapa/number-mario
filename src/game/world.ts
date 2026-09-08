@@ -221,7 +221,7 @@ export class World {
       updateFallingBlock(b, dt, this);
       if (!b.alive) this.fallingBlocks.splice(i, 1);
     }
-    for (const item of this.items) updateItem(item, dt);
+    for (const item of this.items) updateItem(item, dt, this.map);
 
     for (let i = this.rainbow.length - 1; i >= 0; i--) {
       const r = this.rainbow[i];
@@ -403,15 +403,22 @@ export class World {
     if (tile === Tile.Question) {
       setTile(this.map, tx, ty, Tile.Used);
       const isOrb = this.orbBlocks.has(this.tileKey(tx, ty));
-      const item = makeItem(isOrb ? 'orb' : 'coin', tx, ty - 1);
-      item.popVy = -230;
-      this.items.push(item);
-      this.audio.play(isOrb ? 'numberUp' : 'coin');
-      this.particles.burst(tx * TILE + TILE / 2, ty * TILE, 6, '#ffd84d');
-      if (!isOrb) {
+      const cx = tx * TILE + TILE / 2;
+      this.particles.burst(cx, ty * TILE, 6, '#ffd84d');
+      if (isOrb) {
+        // 오브는 블록 위로 튀어나온 뒤 굴러떨어져 플레이어가 주울 수 있는 곳에 멈춘다
+        const item = makeItem('orb', tx, ty - 1);
+        item.physics = true;
+        item.vy = -250;
+        item.vx = (player.facing || 1) * 78;
+        this.items.push(item);
+        this.audio.play('numberUp');
+      } else {
+        // 코인은 마리오처럼 즉시 획득 (튀어나오는 연출만)
         this.coins += 1;
-        this.addScore(SCORE_COIN);
-        item.taken = false;
+        this.addScore(SCORE_COIN, cx, ty * TILE - 6);
+        this.audio.play('coin');
+        this.particles.coinPop(cx, ty * TILE);
       }
     } else if (tile === Tile.Brick) {
       // 4 이상이면 벽돌을 부순다

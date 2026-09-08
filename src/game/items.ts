@@ -1,6 +1,6 @@
 import { TILE, MAX_FALL_SPEED } from '../core/constants';
 import type { Box } from '../engine/aabb';
-import { isSolidAt } from '../engine/tilemap';
+import { isSolidAt, type TileMap } from '../engine/tilemap';
 import type { World } from './world';
 
 export type ItemKind = 'coin' | 'orb' | 'heart' | 'checkpoint' | 'goal' | 'numberpad';
@@ -12,8 +12,14 @@ export interface Item {
   anim: number;
   /** 숫자 패드가 지정하는 숫자 */
   value: number;
-  /** 블록에서 튀어나온 아이템의 상승 애니메이션 */
-  popVy: number;
+  /** 블록에서 튀어나온 아이템의 낙하 속도 */
+  vy: number;
+  /** 튀어나온 아이템이 굴러가는 속도 */
+  vx: number;
+  /** 중력·지형 충돌을 적용할지 */
+  physics: boolean;
+  /** 튀어나온 칸의 행. 이 칸보다 아래에 착지해야 멈춘다 */
+  spawnRow: number;
   active: boolean;
 }
 
@@ -33,18 +39,65 @@ export function makeItem(kind: ItemKind, tx: number, ty: number, value = 0): Ite
     taken: false,
     anim: Math.random() * Math.PI * 2,
     value,
-    popVy: 0,
+    vy: 0,
+    vx: 0,
+    physics: false,
+    spawnRow: ty,
     active: true,
   };
 }
 
-export function updateItem(item: Item, dt: number): void {
+const ITEM_GRAVITY = 1250;
+const ITEM_MAX_FALL = 520;
+
+/**
+ * 아이템 갱신.
+ * 블록에서 튀어나온 아이템(physics)은 마리오의 버섯처럼 위로 튄 뒤
+ * 옆으로 굴러가다가, **나온 칸보다 낮은 발판**에 닿으면 멈춘다.
+ * (블록 위에 그대로 떠 있으면 플레이어가 닿을 수 없기 때문)
+ */
+export function updateItem(item: Item, dt: number, map?: TileMap): void {
   item.anim += dt;
-  if (item.popVy !== 0) {
-    item.box.y += item.popVy * dt;
-    item.popVy += 900 * dt;
-    if (item.popVy > 0 && item.popVy < 40) item.popVy = 0;
+  if (!item.physics || !map) return;
+
+  item.vy = Math.min(item.vy + ITEM_GRAVITY * dt, ITEM_MAX_FALL);
+
+  // 가로: 벽에 닿으면 반대로 굴러간다
+  if (item.vx !== 0) {
+    item.box.x += item.vx * dt;
+    const dir = Math.sign(item.vx);
+    const edgeX = dir > 0 ? item.box.x + item.box.w : item.box.x;
+    const tx = Math.floor(edgeX / TILE);
+    const ty = Math.floor((item.box.y + item.box.h / 2) / TILE);
+    if (isSolidAt(map, tx, ty)) {
+      item.box.x -= item.vx * dt;
+      item.vx = -item.vx;
+    }
   }
+
+  // 세로: 착지 판정
+  item.box.y += item.vy * dt;
+  if (item.vy > 0) {
+    const footRow = Math.floor((item.box.y + item.box.h) / TILE);
+    const cols = [
+      Math.floor(item.box.x / TILE),
+      Math.floor((item.box.x + item.box.w - 0.01) / TILE),
+    ];
+    for (const tx of cols) {
+      if (!isSolidAt(map, tx, footRow)) continue;
+      item.box.y = footRow * TILE - item.box.h;
+      item.vy = 0;
+      // 나온 블록 위가 아니라 더 아래 지면에 닿았을 때만 멈춘다
+      if (footRow > item.spawnRow + 1) {
+        item.physics = false;
+        item.vx = 0;
+      }
+      break;
+    }
+  }
+
+  // 화면 밖으로 떨어지면 사라진다
+  if (item.box.y > map.h * TILE + 60) item.taken = true;
 }
 
 /* ── 별 발사체 ────────────────────────────────────────── */

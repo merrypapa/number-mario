@@ -1,0 +1,27 @@
+{
+  "name": "number-mario",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "넘버런: 카운트랜드 대모험 — 숫자 블록 캐릭터 2D 플랫포머",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --config vite.single.config.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "levels": "python3 tools/gen_levels.py",
+    "shots": "node tools/screenshot.mjs ./screenshots http://localhost:4173/",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7",
+    "vite-plugin-singlefile": "^2.3.0",
+    "vitest": "^3.2.4"
+  }
+}

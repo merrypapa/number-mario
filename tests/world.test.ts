@@ -583,3 +583,127 @@ describe('매직 넘버(무적)', () => {
     expect(world.deaths).toBeGreaterThan(0);
   });
 });
+
+describe('밟기 판정', () => {
+  /** 실제 보스 아레나(1-5)를 그대로 쓴다 */
+  async function bossWorld() {
+    const { LEVELS } = await import('../src/game/levels/data');
+    const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+    const world = new World(events);
+    world.load(LEVELS[4], 4, false);
+    return world;
+  }
+
+  /** 적의 머리 위에서 떨어뜨려 밟게 한다 */
+  function dropOn(world: World, target: { box: { x: number; y: number; w: number; h: number } }): void {
+    const p = world.player;
+    p.box.x = target.box.x + target.box.w / 2 - p.box.w / 2;
+    p.box.y = target.box.y - p.box.h - 4;
+    p.vx = 0;
+    p.vy = 300;
+    p.invuln = 0;
+  }
+
+  it('매직 넘버(무적)를 켜도 보스를 밟을 수 있다', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    world.magicNumber = true;
+    const boss = world.boss!;
+    expect(boss.hp).toBe(3);
+    dropOn(world, boss);
+    step(world, input, 3);
+    expect(boss.hp).toBe(2);
+  });
+
+  it('매직 넘버로 세 번 밟아 보스를 쓰러뜨릴 수 있다', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    world.magicNumber = true;
+    const boss = world.boss!;
+    for (let i = 0; i < 3; i++) {
+      // 보스가 소환한 슬라임을 대신 밟지 않도록 정리하고, 무적도 풀어 둔다
+      world.enemies = world.enemies.filter((e) => e.kind === 'boss');
+      boss.invuln = 0;
+      dropOn(world, boss);
+      step(world, input, 3);
+    }
+    expect(boss.hp).toBeLessThanOrEqual(0);
+    expect(boss.defeated).toBe(true);
+    expect(world.items.some((i) => i.kind === 'goal')).toBe(true);
+    expect(world.player.dead).toBe(false);
+  });
+
+  it('보스를 밟아도 플레이어는 피해를 입지 않는다', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    world.player.setNumber(4, true);
+    const boss = world.boss!;
+    dropOn(world, boss);
+    step(world, input, 20); // 튀어 오르는 동안 계속 겹쳐 있는 구간
+    expect(boss.hp).toBe(2);
+    expect(world.player.number).toBe(4);
+    expect(world.player.dead).toBe(false);
+  });
+
+  it('숫자 1이어도 보스를 밟다가 죽지 않는다', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    expect(world.player.number).toBe(1);
+    dropOn(world, world.boss!);
+    step(world, input, 20);
+    expect(world.player.dead).toBe(false);
+    expect(world.deaths).toBe(0);
+  });
+
+  it('제로슬라임을 밟아도 피해를 입지 않는다', () => {
+    const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+    const world = new World(events);
+    world.load(
+      { id: 'S', name: '슬라임', theme: 'cave', time: 300, rows: ['        ', '        ', ' P  z   ', '########'] },
+      0,
+      false,
+    );
+    const input = new Input();
+    step(world, input, 20);
+    world.player.setNumber(5, true);
+    const slime = world.enemies[0];
+    dropOn(world, slime);
+    step(world, input, 20);
+    expect(world.player.number).toBe(5); // 슬라임은 접촉 시 −2
+    expect(world.player.dead).toBe(false);
+  });
+
+  it('유예는 접촉이 없으면 사라진다', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    const boss = world.boss!;
+    boss.stompGrace = 0.35;
+    world.player.box.x = 3 * TILE; // 보스에게서 멀리 떨어져 있기
+    step(world, input, 40);
+    expect(boss.stompGrace).toBe(0);
+  });
+
+  it('유예가 끝난 뒤 옆에서 부딪히면 피해를 입는다(무적이 되어 버리지 않는다)', async () => {
+    const world = await bossWorld();
+    const input = new Input();
+    step(world, input, 20);
+    world.player.setNumber(6, true);
+    const boss = world.boss!;
+    boss.stompGrace = 0;
+    boss.invuln = 0;
+    // 머리 위가 아니라 몸통 옆에 밀착시킨다
+    const p = world.player;
+    p.box.x = boss.box.x;
+    p.box.y = boss.box.y + boss.box.h - p.box.h;
+    p.vx = 0;
+    p.vy = 0;
+    p.invuln = 0;
+    step(world, input, 2);
+    expect(world.player.number).toBeLessThan(6);
+  });
+});

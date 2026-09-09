@@ -266,6 +266,7 @@ export class World {
     }
 
     for (const e of this.enemies) {
+      e.stompGrace = Math.max(0, e.stompGrace - dt);
       if (e.alive) {
         if (this.isNear(e.box, 400)) e.update(dt, this);
       } else if (e.dying > 0) {
@@ -368,10 +369,23 @@ export class World {
       if (!e.alive) continue;
       if (!overlaps(player.box, e.box)) continue;
 
+      // 밟기를 가장 먼저 본다. 무적·돌진 중이어도 밟을 수 있어야 한다
+      // (매직 넘버로는 보스를 영영 못 잡던 문제)
+      if (isStompingFrom(player.box, e.box, player.vy)) {
+        const killed = e.onStomp(this);
+        e.stompGrace = 0.35;
+        if (killed) {
+          this.addScore(enemyScore(player.stompCombo), e.centerX, e.box.y);
+          player.stompCombo += 1;
+          player.bounce();
+        }
+        continue;
+      }
+
       // 롤링/슈퍼/대시/매직 넘버 상태에서는 닿기만 해도 적을 물리친다
       if (player.rollTime > 0 || player.superTime > 0 || player.dashTime > 0 || this.magicNumber) {
         if (e.kind === 'boss') {
-          // 보스는 매직 넘버로도 밟아야만 피해를 준다
+          // 보스는 밟아야만 피해를 준다(슈퍼는 예외)
           if (player.superTime > 0) e.onStomp(this);
         } else {
           e.hit(this, 3);
@@ -380,15 +394,8 @@ export class World {
         continue;
       }
 
-      if (isStompingFrom(player.box, e.box, player.vy)) {
-        const killed = e.onStomp(this);
-        if (killed) {
-          this.addScore(enemyScore(player.stompCombo), e.centerX, e.box.y);
-          player.stompCombo += 1;
-          player.bounce();
-        }
-        continue;
-      }
+      // 방금 밟은 적에게서 튀어 오르는 중이면 접촉 피해를 주지 않는다
+      if (e.stompGrace > 0) continue;
 
       player.hurt(e.damage, e.centerX, e.damageMode);
     }

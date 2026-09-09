@@ -91,6 +91,7 @@ npm run levels     # tools/gen_levels.py 로 레벨 데이터 재생성
 npm run build      # 프로덕션 빌드 (dist/)
 npm run build:single  # 단일 HTML 빌드 (dist-single/, 오프라인 배포용)
 npm run shots      # 헤드리스 크롬으로 스크린샷 (preview 서버 실행 중일 때)
+npm run mobile     # 모바일 터치 조작 검증 (확대 차단·버튼 누름/떼기)
 ```
 
 ### 레벨 편집 방법

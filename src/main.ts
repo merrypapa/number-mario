@@ -1,6 +1,7 @@
 import { FIXED_DT, MAX_FRAME_DT, VIEW_H, VIEW_W } from './core/constants';
 import { audio } from './core/audio';
 import { Input } from './core/input';
+import { preventBrowserGestures } from './core/touch';
 import { clearSummary, type ClearSummary } from './game/scoring';
 import { LEVELS } from './game/levels/data';
 import { World } from './game/world';
@@ -104,6 +105,7 @@ class Game {
 
     this.input.attach(window);
     this.bindTouch();
+    preventBrowserGestures(document);
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => {
       if (this.screen === 'play') this.setScreen('pause');

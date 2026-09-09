@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "levels": "python3 tools/gen_levels.py",
     "shots": "node tools/screenshot.mjs ./screenshots http://localhost:4173/",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "mobile": "node tools/mobile-check.mjs ./screenshots http://localhost:4173/"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

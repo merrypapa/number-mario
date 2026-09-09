@@ -377,6 +377,35 @@ describe('월드 통합', () => {
     expect(world.player.dead || world.deaths > 0).toBe(true);
   });
 
+  it('2칸 구멍은 어떤 숫자로도, 정지 상태에서 점프해도 건널 수 있다', () => {
+    for (let n = 1; n <= 10; n++) {
+      const { world } = makeWorld([
+        '                    ',
+        '                    ',
+        '                    ',
+        '                    ',
+        ' P                  ',
+        '########  ##########', // 8~9번 칸이 2칸 구멍
+      ]);
+      const input = new Input();
+      step(world, input, 10);
+      world.player.setNumber(n, true);
+      // 달려오지 않고 구멍 바로 앞에 선 상태에서 점프 (가장 불리한 조건)
+      world.player.box.x = 8 * TILE - world.player.box.w;
+      world.player.box.y = 5 * TILE - world.player.box.h;
+      world.player.vx = 0;
+      world.player.vy = 0;
+      step(world, input, 2);
+
+      input.press('jump');
+      input.press('right');
+      step(world, input, 90);
+
+      expect(world.player.dead, `숫자 ${n} 이 2칸 구멍에 빠짐`).toBe(false);
+      expect(world.player.box.x, `숫자 ${n} 이 구멍을 못 건넘`).toBeGreaterThanOrEqual(10 * TILE - 2);
+    }
+  });
+
   it('5개 실제 스테이지 모두 로드되고 30초를 시뮬레이션해도 오류가 없다', async () => {
     const { LEVELS } = await import('../src/game/levels/data');
     for (const level of LEVELS) {

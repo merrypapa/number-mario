@@ -11,6 +11,31 @@ const KNOWN_CHARS = new Set([' ', '#', 'B', '?', '!', '=', '^', 'L', 'S',
 const GROUNDED = new Set(['player', 'numberpad', 'minusbug', 'zeroslime', 'checkpoint', 'goal']);
 
 describe('레벨 데이터 무결성', () => {
+  it('튜토리얼 스테이지(1-1)의 낙하 구멍은 2칸 이하다', () => {
+    // 어린이도 넘을 수 있도록 첫 스테이지만 더 좁게 유지한다
+    const level = LEVELS[0];
+    const map = parseLevel(level.rows);
+    const holeCols: number[] = [];
+    for (let tx = 0; tx < map.w; tx++) {
+      let empty = true;
+      for (let ty = 13; ty < map.h; ty++) {
+        if (getTile(map, tx, ty) !== Tile.Empty) {
+          empty = false;
+          break;
+        }
+      }
+      if (empty) holeCols.push(tx);
+    }
+    let width = 0;
+    let prev = -99;
+    for (const tx of holeCols) {
+      width = tx === prev + 1 ? width + 1 : 1;
+      prev = tx;
+      expect(width, `1-1 의 ${tx}번 칸 근처 구멍이 너무 넓다`).toBeLessThanOrEqual(2);
+    }
+    expect(holeCols.length).toBeGreaterThan(0); // 구멍이 아예 없어지지는 않았는지
+  });
+
   it('5개 스테이지가 정의되어 있다', () => {
     expect(LEVELS.length).toBe(5);
     expect(new Set(LEVELS.map((l) => l.id)).size).toBe(5);

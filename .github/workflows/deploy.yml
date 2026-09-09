@@ -2,7 +2,7 @@ name: 빌드 & GitHub Pages 배포
 
 on:
   push:
-    branches: ['main', 'claude/number-blocks-2d-game-72b7ia']
+    branches: ['main']
   workflow_dispatch:
 
 permissions:

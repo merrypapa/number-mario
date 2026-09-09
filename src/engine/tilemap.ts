@@ -12,6 +12,8 @@ export const enum Tile {
   Stone = 7,
   Used = 8,
   Rainbow = 9,
+  /** 어린이 모드에서 낭떠러지 위에 자동으로 놓이는 사다리 다리 */
+  KidBridge = 10,
 }
 
 export interface SpawnPoint {
@@ -56,7 +58,15 @@ const CHAR_TO_SPAWN: Record<string, string> = {
   V: 'platformV',
 };
 
-const SOLID = new Set<number>([Tile.Ground, Tile.Brick, Tile.Question, Tile.Stone, Tile.Used, Tile.Rainbow]);
+const SOLID = new Set<number>([
+  Tile.Ground,
+  Tile.Brick,
+  Tile.Question,
+  Tile.Stone,
+  Tile.Used,
+  Tile.Rainbow,
+  Tile.KidBridge,
+]);
 
 /**
  * 문자열 행 배열을 타일맵으로 파싱한다.

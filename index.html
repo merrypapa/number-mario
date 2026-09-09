@@ -81,12 +81,48 @@
         right: 14px; top: 14px; width: 40px; height: 40px;
         font-size: 15px; border-radius: 10px;
       }
-      @media (max-height: 420px) {
-      </style>
+      /* 매직 넘버 버튼 — 데스크톱·모바일 모두 표시 */
+      #helpers {
+        /* HUD(위쪽)와 방향/점프 버튼(좌·우 아래) 사이의 빈 공간 */
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 10px;
+        z-index: 5;
+      }
+      #btn-magic {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: bold;
+        color: #ffe98a;
+        background: rgba(20, 24, 38, 0.82);
+        border: 2px solid rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        padding: 8px 13px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      #btn-magic.on {
+        color: #20232e;
+        background: linear-gradient(90deg, #ffd84d, #8fe07f, #87dcff, #bd8bf5);
+        border-color: #ffffff;
+      }
+      #btn-magic:focus-visible { outline: 3px solid #ffd84d; outline-offset: 2px; }
+      /* 세로 화면에서는 아래쪽이 방향 버튼과 겹치므로 위쪽 여백으로 올린다 */
+      @media (orientation: portrait) {
+        #helpers { top: 12px; bottom: auto; }
+      }
+      @media (max-width: 480px) {
+        #btn-magic { font-size: 11px; padding: 7px 10px; }
+      }
+    </style>
   </head>
   <body>
     <div id="wrap">
       <canvas id="game" width="640" height="360" aria-label="넘버런 게임 화면"></canvas>
+    </div>
+    <div id="helpers">
+      <button id="btn-magic" type="button" aria-pressed="false" title="매직 넘버 (M) — 무적">✨ 매직 넘버</button>
     </div>
     <div id="touch" aria-hidden="true">
       <div class="btn" id="btn-left">◀</div>

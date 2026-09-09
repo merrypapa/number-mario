@@ -95,7 +95,7 @@ export class Player {
   }
 
   get invincible(): boolean {
-    return this.invuln > 0 || this.superTime > 0 || this.dashTime > 0;
+    return this.invuln > 0 || this.superTime > 0 || this.dashTime > 0 || this.world.magicNumber;
   }
 
   /** 스폰/부활 시 상태 초기화 */
@@ -372,14 +372,18 @@ export class Player {
 
     /* 위험 타일 */
     const hazard = hazardOverlapping(this.world.map, this.box);
-    if (hazard === Tile.Spike) this.hurt(1, this.centerX + this.facing * 10);
-    else if (hazard === Tile.Lava) {
+    if (hazard === Tile.Spike) {
+      this.hurt(1, this.centerX + this.facing * 10);
+    } else if (hazard === Tile.Lava && !this.world.magicNumber) {
       if (this.world.kidMode) this.hurt(1, this.centerX);
       else this.die();
     }
 
-    /* 낙사 */
-    if (this.box.y > this.world.map.h * TILE + 80) this.die();
+    /* 낙사 — 매직 넘버일 때는 죽지 않고 마지막 안전 지점으로 되돌아간다 */
+    if (this.box.y > this.world.map.h * TILE + 80) {
+      if (this.world.magicNumber) this.world.rescuePlayer();
+      else this.die();
+    }
 
     /* 애니메이션 */
     this.squash += (1 - this.squash) * Math.min(1, dt * 12);

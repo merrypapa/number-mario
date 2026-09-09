@@ -428,3 +428,158 @@ describe('월드 통합', () => {
     }
   });
 });
+
+describe('어린이 모드 사다리', () => {
+  const PIT_LEVEL = [
+    '            ',
+    '            ',
+    '            ',
+    ' P          ',
+    '####   #####', // 4~6번 칸이 낭떠러지
+  ];
+
+  function loadWith(rows: string[], kid: boolean) {
+    const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+    const world = new World(events);
+    world.kidMode = kid;
+    world.load({ id: 'T', name: '테스트', theme: 'field', time: 300, rows }, 0, false);
+    return world;
+  }
+
+  it('어린이 모드가 꺼져 있으면 낭떠러지는 그대로다', () => {
+    const world = loadWith(PIT_LEVEL, false);
+    for (const tx of [4, 5, 6]) expect(getTile(world.map, tx, 4)).toBe(Tile.Empty);
+  });
+
+  it('어린이 모드를 켜면 낭떠러지에 사다리가 깔린다', () => {
+    const world = loadWith(PIT_LEVEL, true);
+    for (const tx of [4, 5, 6]) expect(getTile(world.map, tx, 4)).toBe(Tile.KidBridge);
+    // 원래 지면은 건드리지 않는다
+    expect(getTile(world.map, 0, 4)).toBe(Tile.Ground);
+  });
+
+  it('사다리 위를 걸어서 낭떠러지를 건널 수 있다(점프 없이)', () => {
+    const world = loadWith(PIT_LEVEL, true);
+    const input = new Input();
+    input.press('right');
+    step(world, input, 120);
+    expect(world.player.dead).toBe(false);
+    expect(world.player.box.x).toBeGreaterThan(7 * TILE);
+  });
+
+  it('용암 구덩이에도 사다리를 놓아 건너게 한다', () => {
+    const world = loadWith([
+      '            ',
+      '            ',
+      '            ',
+      ' P          ',
+      '####LLL#####',
+      '####LLL#####',
+    ], true);
+    for (const tx of [4, 5, 6]) expect(getTile(world.map, tx, 4)).toBe(Tile.KidBridge);
+  });
+
+  it('양쪽 지면 높이가 다르면 낮은 쪽에 맞춘다', () => {
+    const world = loadWith([
+      '            ',
+      '            ',
+      '####        ',
+      '####   #####', // 왼쪽 바닥 2행, 오른쪽 3행
+      '####   #####',
+    ], true);
+    for (const tx of [4, 5, 6]) expect(getTile(world.map, tx, 3)).toBe(Tile.KidBridge);
+  });
+
+  it('실제 5개 스테이지 모두 사다리가 깔리고 낙사 구멍이 사라진다', async () => {
+    const { LEVELS } = await import('../src/game/levels/data');
+    for (const level of LEVELS) {
+      const world = loadWith(level.rows, true);
+      for (let tx = 0; tx < world.map.w; tx++) {
+        let hasFloor = false;
+        for (let ty = Math.floor(world.map.h / 2); ty < world.map.h; ty++) {
+          if (getTile(world.map, tx, ty) !== Tile.Empty) {
+            hasFloor = true;
+            break;
+          }
+        }
+        expect(hasFloor, `${level.id} 의 ${tx}번 칸에 바닥이 없다`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('매직 넘버(무적)', () => {
+  function magicWorld(rows: string[]) {
+    const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+    const world = new World(events);
+    world.load({ id: 'T', name: '테스트', theme: 'field', time: 300, rows }, 0, false);
+    world.magicNumber = true;
+    return world;
+  }
+
+  it('적에게 부딪혀도 다치지 않고 오히려 적을 물리친다', () => {
+    const world = magicWorld([
+      '        ',
+      '        ',
+      ' P m    ',
+      '########',
+    ]);
+    const input = new Input();
+    step(world, input, 5);
+    world.player.setNumber(3, true);
+    input.press('right');
+    step(world, input, 60);
+    expect(world.player.number).toBe(3);
+    expect(world.player.dead).toBe(false);
+    expect(world.enemies.some((e) => e.alive)).toBe(false);
+  });
+
+  it('가시와 용암에 닿아도 죽지 않는다', () => {
+    const world = magicWorld([
+      '        ',
+      '        ',
+      ' P ^ L  ',
+      '########',
+    ]);
+    const input = new Input();
+    step(world, input, 5);
+    world.player.setNumber(4, true);
+    input.press('right');
+    step(world, input, 90);
+    expect(world.player.dead).toBe(false);
+    expect(world.player.number).toBe(4);
+  });
+
+  it('떨어져도 죽지 않고 마지막 안전 지점으로 돌아온다', () => {
+    const world = magicWorld([
+      '        ',
+      '        ',
+      ' P      ',
+      '###     ',
+    ]);
+    const input = new Input();
+    step(world, input, 10);
+    const safeX = world.player.centerX;
+    input.press('right');
+    step(world, input, 200);
+    expect(world.player.dead).toBe(false);
+    expect(world.deaths).toBe(0);
+    expect(world.lives).toBe(3);
+    expect(Math.abs(world.player.centerX - safeX)).toBeLessThan(3 * TILE);
+  });
+
+  it('꺼져 있으면 평소대로 죽는다', () => {
+    const world = magicWorld([
+      '        ',
+      '        ',
+      ' P      ',
+      '###     ',
+    ]);
+    world.magicNumber = false;
+    const input = new Input();
+    step(world, input, 10);
+    input.press('right');
+    step(world, input, 200);
+    expect(world.deaths).toBeGreaterThan(0);
+  });
+});

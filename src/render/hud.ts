@@ -2,7 +2,7 @@ import { VIEW_W } from '../core/constants';
 import { formatScore, formatTime } from '../game/scoring';
 import { cooldownRatio, skillOf } from '../game/skills';
 import type { World } from '../game/world';
-import { COLORS, NUMBER_COLORS } from './palette';
+import { COLORS, NUMBER_COLORS, RAINBOW } from './palette';
 import { drawHeartShape, drawText, roundRect, drawStarShape, type Ctx } from './sprites';
 
 function panel(ctx: Ctx, x: number, y: number, w: number, h: number): void {
@@ -79,6 +79,22 @@ export function drawHud(ctx: Ctx, world: World, time: number): void {
     low && Math.floor(time * 4) % 2 === 0 ? '#ff7d70' : '#ffffff',
     'center',
   );
+
+  /* 매직 넘버 표시 */
+  if (world.magicNumber) {
+    const label = '✨ 매직 넘버 — 무적';
+    const w = 148;
+    const x = VIEW_W / 2 - w / 2;
+    const y = world.boss && world.boss.alive ? 86 : 56;
+    ctx.fillStyle = 'rgba(20,24,38,0.82)';
+    roundRect(ctx, x, y, w, 20, 6);
+    ctx.fill();
+    ctx.strokeStyle = RAINBOW[Math.floor(time * 8) % RAINBOW.length];
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, 20, 6);
+    ctx.stroke();
+    drawText(ctx, label, VIEW_W / 2, y + 14, 11, '#ffe98a', 'center');
+  }
 
   /* 보스 체력 바 */
   if (world.boss && world.boss.alive) {

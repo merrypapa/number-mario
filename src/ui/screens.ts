@@ -178,14 +178,21 @@ export function drawHelp(ctx: Ctx, time: number): void {
   }
 }
 
-export function drawPause(ctx: Ctx, menu: Menu, time: number, soundOn: boolean, kidMode: boolean): void {
+export function drawPause(
+  ctx: Ctx,
+  menu: Menu,
+  time: number,
+  soundOn: boolean,
+  kidMode: boolean,
+  magic = false,
+): void {
   dim(ctx);
   const cx = VIEW_W / 2;
   drawText(ctx, '일시정지', cx, 96, 26, '#ffd84d', 'center');
   drawMenu(ctx, menu, cx, 150, 28, time);
   drawText(
     ctx,
-    `소리 ${soundOn ? '켜짐' : '꺼짐'}   ·   어린이 모드 ${kidMode ? '켜짐' : '꺼짐'}`,
+    `소리 ${soundOn ? '켜짐' : '꺼짐'}   ·   어린이 모드 ${kidMode ? '켜짐' : '꺼짐'}   ·   매직 넘버 ${magic ? '켜짐' : '꺼짐'}`,
     cx,
     VIEW_H - 30,
     11,

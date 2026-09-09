@@ -129,6 +129,28 @@ function drawLavaTile(ctx: Ctx, x: number, y: number, time: number, surface: boo
   ctx.fillRect(x, y + TILE - 6, TILE, 6);
 }
 
+/** 어린이 모드 도우미 — 낭떠러지 위에 놓이는 사다리 다리 */
+function drawKidBridgeTile(ctx: Ctx, x: number, y: number, time: number): void {
+  ctx.fillStyle = '#e0b070';
+  roundRect(ctx, x, y + 2, TILE, 12, 3);
+  ctx.fill();
+  ctx.fillStyle = '#a3703a';
+  ctx.fillRect(x, y + 12, TILE, 3);
+  // 가로 레일
+  ctx.fillStyle = '#f7e2bb';
+  ctx.fillRect(x, y + 3, TILE, 2);
+  ctx.fillRect(x, y + 10, TILE, 2);
+  // 세로 발판
+  ctx.fillStyle = '#a3703a';
+  ctx.fillRect(x + 5, y + 4, 3, 7);
+  ctx.fillRect(x + 16, y + 4, 3, 7);
+  // 도우미라는 걸 알리는 은은한 반짝임
+  ctx.globalAlpha = 0.25 + 0.2 * Math.sin(time * 3 + x * 0.05);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y + 1, TILE, 2);
+  ctx.globalAlpha = 1;
+}
+
 function drawRainbowTile(ctx: Ctx, x: number, y: number, tx: number, time: number): void {
   const bands = 4;
   for (let i = 0; i < bands; i++) {
@@ -180,6 +202,9 @@ export function drawTiles(ctx: Ctx, world: World, time: number, dark: boolean): 
         case Tile.Rainbow:
           drawRainbowTile(ctx, x, y, tx, time);
           break;
+        case Tile.KidBridge:
+          drawKidBridgeTile(ctx, x, y, time);
+          break;
         default:
           break;
       }
@@ -189,7 +214,7 @@ export function drawTiles(ctx: Ctx, world: World, time: number, dark: boolean): 
 
 /* ── 플레이어 ─────────────────────────────────────────── */
 
-export function drawPlayer(ctx: Ctx, player: Player, time: number): void {
+export function drawPlayer(ctx: Ctx, player: Player, time: number, magic = false): void {
   const cells = shapeOf(player.number);
   const color = NUMBER_COLORS[player.number];
   const bx = player.box.x + player.box.w / 2;
@@ -295,8 +320,8 @@ export function drawPlayer(ctx: Ctx, player: Player, time: number): void {
     ctx.restore();
   }
 
-  // 슈퍼 오라
-  if (player.superTime > 0) {
+  // 슈퍼 / 매직 넘버 오라
+  if (player.superTime > 0 || magic) {
     ctx.save();
     ctx.globalAlpha = 0.35;
     ctx.strokeStyle = RAINBOW[Math.floor(time * 12) % RAINBOW.length];
@@ -609,7 +634,9 @@ export function drawWorld(ctx: Ctx, world: World, time: number): void {
     ctx.restore();
   }
 
-  if (!world.player.dead || world.player.deadTimer < 2) drawPlayer(ctx, world.player, time);
+  if (!world.player.dead || world.player.deadTimer < 2) {
+    drawPlayer(ctx, world.player, time, world.magicNumber);
+  }
 
   // 파티클
   for (const p of world.particles.items) {

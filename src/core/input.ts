@@ -1,4 +1,4 @@
-export type Action = 'left' | 'right' | 'up' | 'down' | 'jump' | 'skill' | 'pause' | 'confirm';
+export type Action = 'left' | 'right' | 'up' | 'down' | 'jump' | 'skill' | 'pause' | 'confirm' | 'magic';
 
 const KEY_MAP: Record<string, Action[]> = {
   ArrowLeft: ['left'],
@@ -18,6 +18,7 @@ const KEY_MAP: Record<string, Action[]> = {
   Enter: ['confirm'],
   Escape: ['pause'],
   KeyP: ['pause'],
+  KeyM: ['magic'],
 };
 
 /** 키보드 + 터치 입력을 액션 단위로 정규화한다. */

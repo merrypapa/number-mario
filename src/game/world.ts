@@ -76,7 +76,12 @@ export class World {
   timeLeft = 300;
   deaths = 0;
   kidMode = false;
+  /** 매직 넘버: 켜져 있는 동안 무적 */
+  magicNumber = false;
   cleared = false;
+  /** 매직 넘버로 구조할 때 되돌아갈 마지막 안전 지점 */
+  private lastSafeX = 0;
+  private lastSafeY = 0;
   /** 아이템 블록에서 오브가 나오는 칸 */
   private orbBlocks = new Set<number>();
   private spawnX = 0;
@@ -167,9 +172,60 @@ export class World {
       }
     }
 
+    if (this.kidMode) this.buildKidBridges();
+
+    this.lastSafeX = this.spawnX;
+    this.lastSafeY = this.spawnY;
     this.player.spawnAt(this.spawnX, this.spawnY, 1);
     this.camera.follow(this.player.centerX, this.player.centerY, 1, true);
     this.audio.startMusic(level.theme);
+  }
+
+  /**
+   * 어린이 모드: 떨어져 죽는 구간(바닥이 아예 없거나 용암뿐인 칸)에
+   * 양옆 지면 높이에 맞춰 사다리 다리를 깔아 걸어서 지나갈 수 있게 한다.
+   */
+  private buildKidBridges(): void {
+    const map = this.map;
+    // 위쪽 절반은 동굴 천장이므로 바닥 후보에서 제외한다
+    const minRow = Math.floor(map.h / 2);
+    const floorTop = (tx: number): number | null => {
+      for (let ty = minRow; ty < map.h; ty++) {
+        if (isSolidAt(map, tx, ty) || getTile(map, tx, ty) === Tile.OneWay) return ty;
+      }
+      return null;
+    };
+
+    const gaps: Array<[number, number]> = [];
+    let start = -1;
+    for (let tx = 0; tx < map.w; tx++) {
+      if (floorTop(tx) === null) {
+        if (start < 0) start = tx;
+      } else if (start >= 0) {
+        gaps.push([start, tx - 1]);
+        start = -1;
+      }
+    }
+    if (start >= 0) gaps.push([start, map.w - 1]);
+
+    for (const [a, b] of gaps) {
+      const left = a > 0 ? floorTop(a - 1) : null;
+      const right = b < map.w - 1 ? floorTop(b + 1) : null;
+      if (left === null && right === null) continue;
+      // 낮은 쪽(행 번호가 큰 쪽)에 맞춰야 걸어서 내려설 수 있다
+      const row = Math.max(left ?? right ?? 0, right ?? left ?? 0);
+      if (row < 0 || row >= map.h) continue;
+      for (let tx = a; tx <= b; tx++) setTile(map, tx, row, Tile.KidBridge);
+    }
+  }
+
+  /** 매직 넘버 상태에서 떨어졌을 때 마지막 안전 지점으로 되돌린다 */
+  rescuePlayer(): void {
+    this.player.spawnAt(this.lastSafeX, this.lastSafeY, this.player.number);
+    this.audio.play('checkpoint');
+    this.particles.burst(this.player.centerX, this.player.centerY, 16, '#8fe07f');
+    this.particles.floatingText(this.player.centerX, this.player.box.y - 8, '휴!', '#8fe07f');
+    this.camera.follow(this.player.centerX, this.player.centerY, 1, true);
   }
 
   private tileKey(tx: number, ty: number): number {
@@ -202,6 +258,12 @@ export class World {
     }
 
     this.player.update(dt, input);
+
+    // 땅에 서 있는 동안의 위치를 구조 지점으로 기억한다
+    if (this.player.onGround && !this.player.dead) {
+      this.lastSafeX = this.player.centerX;
+      this.lastSafeY = this.player.box.y + this.player.box.h;
+    }
 
     for (const e of this.enemies) {
       if (e.alive) {
@@ -306,9 +368,10 @@ export class World {
       if (!e.alive) continue;
       if (!overlaps(player.box, e.box)) continue;
 
-      // 롤링/슈퍼/대시 상태에서는 닿기만 해도 적을 물리친다
-      if (player.rollTime > 0 || player.superTime > 0 || player.dashTime > 0) {
+      // 롤링/슈퍼/대시/매직 넘버 상태에서는 닿기만 해도 적을 물리친다
+      if (player.rollTime > 0 || player.superTime > 0 || player.dashTime > 0 || this.magicNumber) {
         if (e.kind === 'boss') {
+          // 보스는 매직 넘버로도 밟아야만 피해를 준다
           if (player.superTime > 0) e.onStomp(this);
         } else {
           e.hit(this, 3);

@@ -25,6 +25,8 @@ interface Settings {
   sound: boolean;
   music: boolean;
   kid: boolean;
+  /** 매직 넘버(무적) 도우미 */
+  magic: boolean;
 }
 
 const STORAGE_BEST = 'numberrun.best';
@@ -33,11 +35,11 @@ const STORAGE_SETTINGS = 'numberrun.settings';
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_SETTINGS);
-    if (raw) return { sound: true, music: true, kid: false, ...JSON.parse(raw) };
+    if (raw) return { sound: true, music: true, kid: false, magic: false, ...JSON.parse(raw) };
   } catch {
     /* 저장소 접근 불가 시 기본값 */
   }
-  return { sound: true, music: true, kid: false };
+  return { sound: true, music: true, kid: false, magic: false };
 }
 
 function saveSettings(s: Settings): void {
@@ -99,12 +101,14 @@ class Game {
       },
     });
     this.world.kidMode = this.settings.kid;
+    this.world.magicNumber = this.settings.magic;
     audio.soundOn = this.settings.sound;
     audio.setMusicOn(this.settings.music);
     this.refreshMenus();
 
     this.input.attach(window);
     this.bindTouch();
+    this.bindMagicButton();
     preventBrowserGestures(document);
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => {
@@ -172,6 +176,36 @@ class Game {
     }
   }
 
+  private bindMagicButton(): void {
+    const el = document.getElementById('btn-magic');
+    if (!el) return;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      audio.init();
+      this.toggleMagic();
+    });
+    this.syncMagicButton();
+  }
+
+  /** 매직 넘버(무적) 켜기/끄기 */
+  private toggleMagic(): void {
+    this.settings.magic = !this.settings.magic;
+    this.world.magicNumber = this.settings.magic;
+    saveSettings(this.settings);
+    this.syncMagicButton();
+    audio.play(this.settings.magic ? 'numberUp' : 'select');
+    if (this.settings.magic) {
+      this.world.particles.burst(this.world.player.centerX, this.world.player.centerY, 20, '#ffd84d');
+    }
+  }
+
+  private syncMagicButton(): void {
+    const el = document.getElementById('btn-magic');
+    if (!el) return;
+    el.classList.toggle('on', this.settings.magic);
+    el.setAttribute('aria-pressed', String(this.settings.magic));
+  }
+
   private refreshMenus(): void {
     this.titleMenu.items = [
       '게임 시작',
@@ -201,6 +235,7 @@ class Game {
   private startGame(): void {
     this.levelIndex = 0;
     this.world.kidMode = this.settings.kid;
+    this.world.magicNumber = this.settings.magic;
     this.stageStartScore = 0;
     this.world.load(LEVELS[0], 0, false);
     this.setScreen('intro');
@@ -210,6 +245,7 @@ class Game {
     this.levelIndex = index;
     this.stageStartScore = keepProgress ? this.world.score : 0;
     this.world.kidMode = this.settings.kid;
+    this.world.magicNumber = this.settings.magic;
     this.world.load(LEVELS[index], index, keepProgress);
     this.setScreen('intro');
   }
@@ -267,11 +303,19 @@ class Game {
     }
   }
 
+  /**
+   * 메뉴 확정. 'jump' 는 확정으로 치지 않는다 —
+   * ↑ 키가 jump 에도 매핑돼 있어서, 위로 이동하는 순간 그 항목이
+   * 선택되어 버리기 때문이다. (터치 점프 버튼은 confirm 도 함께 보낸다)
+   */
   private confirmPressed(): boolean {
-    return this.input.justPressed('confirm') || this.input.justPressed('jump');
+    return this.input.justPressed('confirm');
   }
 
   private update(dt: number): void {
+    // 매직 넘버는 어느 화면에서든 M 키로 켜고 끌 수 있다
+    if (this.input.justPressed('magic')) this.toggleMagic();
+
     switch (this.screen) {
       case 'title': {
         this.menuNav(this.titleMenu);
@@ -434,7 +478,7 @@ class Game {
       case 'pause':
         drawWorld(ctx, this.world, this.time);
         drawHud(ctx, this.world, this.time);
-        drawPause(ctx, this.pauseMenu, this.time, this.settings.sound, this.settings.kid);
+        drawPause(ctx, this.pauseMenu, this.time, this.settings.sound, this.settings.kid, this.settings.magic);
         break;
       case 'clear':
         drawWorld(ctx, this.world, this.time);

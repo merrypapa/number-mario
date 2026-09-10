@@ -7,6 +7,9 @@ import { clearSummary, type ClearSummary } from './game/scoring';
 import { LEVELS } from './game/levels/data';
 import { World } from './game/world';
 import { drawWorld } from './render/draw';
+import { drawWorldMap } from './render/worldmap';
+import { MAP_NODES, loadProgress, nodeAt, pathPoint, saveProgress } from './game/worldmap';
+import { addRecord, loadRecords, saveRecords, type RunRecord } from './game/records';
 import { drawHud, drawStageIntro } from './render/hud';
 import {
   STORY_PAGE_COUNT,
@@ -15,12 +18,25 @@ import {
   drawGameOver,
   drawHelp,
   drawPause,
+  drawRecords,
   drawStory,
   drawTitle,
   type Menu,
 } from './ui/screens';
 
-type Screen = 'title' | 'story' | 'help' | 'intro' | 'play' | 'pause' | 'clear' | 'gameover' | 'ending';
+type Screen =
+  | 'title'
+  | 'story'
+  | 'help'
+  | 'map'
+  | 'intro'
+  | 'play'
+  | 'pause'
+  | 'clear'
+  | 'gameover'
+  | 'ending'
+  | 'name'
+  | 'records';
 
 interface Settings {
   sound: boolean;
@@ -85,6 +101,19 @@ class Game {
   private summary: ClearSummary = { base: 0, timeBonus: 0, noDeathBonus: 0, total: 0 };
   private scale = 1;
 
+  /* 월드맵 */
+  private unlocked = loadProgress();
+  private mapCursor = 0;
+  private mapMarker = { x: MAP_NODES[0].x, y: MAP_NODES[0].y };
+  private mapMove: { from: number; to: number; t: number } | null = null;
+
+  /* 기록 */
+  private records: RunRecord[] = loadRecords();
+  private runAssisted = false;
+  private recordsScroll = 0;
+  /** 이번에 스테이지에 들어갈 때 점수를 초기화할지 */
+  private freshRun = true;
+
   private titleMenu: Menu = { items: [], index: 0 };
   private pauseMenu: Menu = { items: [], index: 0 };
   private overMenu: Menu = { items: ['다시 시도', '타이틀로'], index: 0 };
@@ -110,6 +139,7 @@ class Game {
     this.input.attach(window);
     this.bindTouch();
     this.bindMagicButton();
+    this.bindNameEntry();
     preventBrowserGestures(document);
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('blur', () => {
@@ -182,6 +212,56 @@ class Game {
     }
   }
 
+  /** 완주 기록 등록 창 */
+  private openNameEntry(): void {
+    this.setScreen('name');
+    const panel = document.getElementById('nameentry');
+    const input = document.getElementById('ne-input') as HTMLInputElement | null;
+    if (!panel || !input) {
+      this.setScreen('records');
+      return;
+    }
+    panel.hidden = false;
+    input.value = '';
+    window.setTimeout(() => input.focus(), 60);
+  }
+
+  private closeNameEntry(save: boolean): void {
+    const panel = document.getElementById('nameentry');
+    const input = document.getElementById('ne-input') as HTMLInputElement | null;
+    if (panel) panel.hidden = true;
+    if (save && input) {
+      const name = input.value.trim().slice(0, 10) || '이름없음';
+      const record: RunRecord = {
+        name,
+        score: this.world.score,
+        coins: this.world.coins,
+        deaths: this.world.deaths,
+        seconds: this.world.playSeconds,
+        bestNumber: this.world.bestNumber,
+        assisted: this.runAssisted,
+        at: new Date().toISOString(),
+      };
+      this.records = addRecord(this.records, record);
+      saveRecords(this.records);
+      audio.play('clear');
+    }
+    this.recordsScroll = 0;
+    this.setScreen('records');
+  }
+
+  private bindNameEntry(): void {
+    const save = document.getElementById('ne-save');
+    const skip = document.getElementById('ne-skip');
+    const input = document.getElementById('ne-input') as HTMLInputElement | null;
+    save?.addEventListener('click', () => this.closeNameEntry(true));
+    skip?.addEventListener('click', () => this.closeNameEntry(false));
+    input?.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') this.closeNameEntry(true);
+    });
+  }
+
   private bindMagicButton(): void {
     const el = document.getElementById('btn-magic');
     if (!el) return;
@@ -214,11 +294,13 @@ class Game {
 
   private refreshMenus(): void {
     this.titleMenu.items = [
-      '게임 시작',
+      ...(this.unlocked > 0 ? ['이어하기', '처음부터'] : ['게임 시작']),
+      '기록 보기',
       '조작법 / 스킬',
       `어린이 모드: ${this.settings.kid ? '켬' : '끔'}`,
       `소리: ${this.settings.sound ? '켬' : '끔'}`,
     ];
+    this.titleMenu.index = Math.min(this.titleMenu.index, this.titleMenu.items.length - 1);
     this.pauseMenu.items = [
       '계속하기',
       '스테이지 다시 시작',
@@ -241,13 +323,36 @@ class Game {
     }
   }
 
-  private startGame(): void {
-    this.levelIndex = 0;
-    this.world.kidMode = this.settings.kid;
-    this.world.magicNumber = this.settings.magic;
-    this.stageStartScore = 0;
-    this.world.load(LEVELS[0], 0, false);
-    this.setScreen('intro');
+  /** 지도에서 시작 (fresh 면 처음부터) */
+  private beginRun(fresh: boolean): void {
+    if (fresh) {
+      this.unlocked = 0;
+      saveProgress(0);
+      this.refreshMenus();
+    }
+    this.freshRun = fresh;
+    this.runAssisted = this.settings.kid || this.settings.magic;
+    this.mapCursor = fresh ? 0 : Math.min(this.unlocked, MAP_NODES.length - 1);
+    const node = nodeAt(this.mapCursor);
+    this.mapMarker = { x: node.x, y: node.y };
+    this.mapMove = null;
+    audio.stopMusic();
+    this.setScreen('map');
+  }
+
+  /** 지도 위에서 옆 지점으로 걸어간다 */
+  private moveMapCursor(dir: number): void {
+    const next = this.mapCursor + dir;
+    if (next < 0 || next >= MAP_NODES.length || next > this.unlocked) return;
+    this.mapMove = { from: this.mapCursor, to: next, t: 0 };
+    audio.play('select');
+  }
+
+  private enterStage(index: number): void {
+    const fresh = this.freshRun;
+    this.freshRun = false;
+    if (this.settings.kid || this.settings.magic) this.runAssisted = true;
+    this.loadLevel(index, !fresh);
   }
 
   private loadLevel(index: number, keepProgress: boolean): void {
@@ -331,30 +436,32 @@ class Game {
         if (this.confirmPressed()) {
           audio.init();
           audio.play('select');
-          switch (this.titleMenu.index) {
-            case 0:
-              this.storyPage = 0;
-              this.setScreen('story');
-              break;
-            case 1:
-              this.setScreen('help');
-              break;
-            case 2:
-              this.settings.kid = !this.settings.kid;
-              this.world.kidMode = this.settings.kid;
-              saveSettings(this.settings);
-              this.refreshMenus();
-              break;
-            case 3:
-              this.settings.sound = !this.settings.sound;
-              this.settings.music = this.settings.sound;
-              audio.soundOn = this.settings.sound;
-              audio.setMusicOn(this.settings.music);
-              saveSettings(this.settings);
-              this.refreshMenus();
-              break;
-            default:
-              break;
+          const picked = this.titleMenu.items[this.titleMenu.index];
+          if (picked === '이어하기') {
+            this.beginRun(false);
+          } else if (picked === '게임 시작' || picked === '처음부터') {
+            this.unlocked = 0;
+            saveProgress(0);
+            this.refreshMenus();
+            this.storyPage = 0;
+            this.setScreen('story');
+          } else if (picked === '기록 보기') {
+            this.recordsScroll = 0;
+            this.setScreen('records');
+          } else if (picked === '조작법 / 스킬') {
+            this.setScreen('help');
+          } else if (picked.startsWith('어린이 모드')) {
+            this.settings.kid = !this.settings.kid;
+            this.world.kidMode = this.settings.kid;
+            saveSettings(this.settings);
+            this.refreshMenus();
+          } else if (picked.startsWith('소리')) {
+            this.settings.sound = !this.settings.sound;
+            this.settings.music = this.settings.sound;
+            audio.soundOn = this.settings.sound;
+            audio.setMusicOn(this.settings.music);
+            saveSettings(this.settings);
+            this.refreshMenus();
           }
         }
         break;
@@ -364,7 +471,7 @@ class Game {
           this.storyPage += 1;
           this.screenTime = 0;
           audio.play('select');
-          if (this.storyPage >= STORY_PAGE_COUNT) this.startGame();
+          if (this.storyPage >= STORY_PAGE_COUNT) this.beginRun(true);
         }
         break;
       }
@@ -431,8 +538,19 @@ class Game {
       }
       case 'clear': {
         if (this.input.anyPressed() && this.screenTime > 0.5) {
-          if (this.levelIndex + 1 >= LEVELS.length) this.setScreen('ending');
-          else this.loadLevel(this.levelIndex + 1, true);
+          const cleared = this.levelIndex;
+          this.unlocked = Math.max(this.unlocked, Math.min(cleared + 1, LEVELS.length - 1));
+          saveProgress(this.unlocked);
+          this.refreshMenus();
+          if (cleared + 1 >= LEVELS.length) {
+            this.setScreen('ending');
+          } else {
+            const from = nodeAt(cleared);
+            this.mapCursor = cleared;
+            this.mapMarker = { x: from.x, y: from.y };
+            this.mapMove = { from: cleared, to: cleared + 1, t: 0 };
+            this.setScreen('map');
+          }
         }
         break;
       }
@@ -443,6 +561,7 @@ class Game {
           if (this.overMenu.index === 0) {
             this.world.score = this.stageStartScore;
             this.loadLevel(this.levelIndex, true);
+            this.world.resetLives(); // 게임 오버 후에는 라이프를 되돌려 준다
           } else {
             this.setScreen('title');
           }
@@ -450,7 +569,43 @@ class Game {
         break;
       }
       case 'ending': {
-        if (this.input.anyPressed() && this.screenTime > 1.5) this.setScreen('title');
+        if (this.input.anyPressed() && this.screenTime > 1.5) this.openNameEntry();
+        break;
+      }
+      case 'map': {
+        if (this.mapMove) {
+          this.mapMove.t += dt * 1.5;
+          const from = nodeAt(this.mapMove.from);
+          const to = nodeAt(this.mapMove.to);
+          this.mapMarker = pathPoint(from, to, Math.min(1, this.mapMove.t));
+          if (this.mapMove.t >= 1) {
+            this.mapCursor = this.mapMove.to;
+            this.mapMove = null;
+          }
+          break;
+        }
+        if (this.input.justPressed('left')) this.moveMapCursor(-1);
+        if (this.input.justPressed('right')) this.moveMapCursor(1);
+        if (this.input.justPressed('pause')) {
+          this.setScreen('title');
+          break;
+        }
+        if (this.confirmPressed() && this.mapCursor <= this.unlocked) {
+          audio.play('select');
+          this.enterStage(this.mapCursor);
+        }
+        break;
+      }
+      case 'name':
+        // DOM 입력창이 처리한다
+        break;
+      case 'records': {
+        if (this.input.justPressed('down')) this.recordsScroll += 1;
+        if (this.input.justPressed('up')) this.recordsScroll -= 1;
+        this.recordsScroll = Math.max(0, Math.min(this.recordsScroll, Math.max(0, this.records.length - 8)));
+        if ((this.confirmPressed() || this.input.justPressed('pause')) && this.screenTime > 0.3) {
+          this.setScreen('title');
+        }
         break;
       }
       default:
@@ -506,6 +661,22 @@ class Game {
         break;
       case 'ending':
         drawEnding(ctx, this.world.score, this.screenTime);
+        break;
+      case 'map':
+        drawWorldMap(ctx, {
+          unlocked: this.unlocked,
+          cursor: this.mapCursor,
+          marker: this.mapMarker,
+          cleared: this.unlocked,
+          time: this.time,
+          moving: this.mapMove !== null,
+        });
+        break;
+      case 'name':
+        drawEnding(ctx, this.world.score, 12);
+        break;
+      case 'records':
+        drawRecords(ctx, this.records, this.recordsScroll, this.time);
         break;
       default:
         break;

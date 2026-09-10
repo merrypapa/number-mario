@@ -14,6 +14,8 @@ export const enum Tile {
   Rainbow = 9,
   /** 어린이 모드에서 낭떠러지 위에 자동으로 놓이는 사다리 다리 */
   KidBridge = 10,
+  /** 초록 파이프 (들어가면 보너스 방으로) */
+  Pipe = 11,
 }
 
 export interface SpawnPoint {
@@ -40,6 +42,7 @@ const CHAR_TO_TILE: Record<string, Tile> = {
   '^': Tile.Spike,
   L: Tile.Lava,
   S: Tile.Stone,
+  n: Tile.Pipe,
 };
 
 /** 문자 → 엔티티 종류 */
@@ -66,6 +69,7 @@ const SOLID = new Set<number>([
   Tile.Used,
   Tile.Rainbow,
   Tile.KidBridge,
+  Tile.Pipe,
 ]);
 
 /**
@@ -87,6 +91,12 @@ export function parseLevel(rows: readonly string[]): TileMap {
       const tile = CHAR_TO_TILE[ch];
       if (tile !== undefined) {
         tiles[ty * w + tx] = tile;
+        continue;
+      }
+      // 파이프 입구/출구는 타일이면서 동시에 이동 지점이다
+      if (ch === 'w' || ch === 'e') {
+        tiles[ty * w + tx] = Tile.Pipe;
+        spawns.push({ kind: ch === 'w' ? 'pipeEnter' : 'pipeExit', tx, ty });
         continue;
       }
       if (ch === '!') {

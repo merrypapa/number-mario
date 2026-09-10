@@ -52,6 +52,12 @@ class Grid:
         for i in range(steps):
             self.rect(x + i * w, y - i, w, GROUND_ROW - (y - i), ch)
 
+    def pipe(self, x, y, h, kind='w'):
+        """2칸 폭 초록 파이프. kind='w' 입구, 'e' 출구, None 이면 그냥 장식."""
+        self.rect(x, y, 2, h, 'n')
+        if kind:
+            self.put(x, y, kind)
+
     def rows(self):
         return [''.join(r).rstrip() for r in self.g]
 
@@ -136,10 +142,12 @@ def level_1_1():
     g.coins(160, 10, 2)
     g.put(166, 12, 'm')
 
+    g.pipe(112, 11, 2)           # 하수구 → 보너스 방
     g.rect(172, 11, 12, 2, '#')  # 골 언덕(단차 2칸)
     g.coins(173, 10, 2)
     g.put(177, 10, 'F')
-    return dict(id='1-1', name='카운트 초원', theme='field', time=300, rows=g.rows())
+    return dict(id='1-1', name='카운트 초원', theme='field', time=300,
+                rows=g.rows(), bonus=bonus_room('coins'))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -225,11 +233,13 @@ def level_1_2():
     g.put(175, 12, 'm')
     g.row_of(178, 8, 'BB?BB')
 
+    g.pipe(155, 11, 2)
     g.rect(186, 12, 3, 1, '#')
     g.rect(189, 11, 11, 2, '#')
     g.coins(190, 10, 2)
     g.put(194, 10, 'F')
-    return dict(id='1-2', name='벽돌 언덕', theme='hill', time=320, rows=g.rows())
+    return dict(id='1-2', name='벽돌 언덕', theme='hill', time=320,
+                rows=g.rows(), bonus=bonus_room('orb'))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -288,9 +298,11 @@ def level_1_3():
     g.put(129, 7, 'b')
     g.row_of(132, 8, 'BB?BB')
     g.put(138, 12, 'm')
+    g.pipe(122, 11, 2)
     g.rect(142, 11, 8, 2, '#')
     g.put(145, 10, 'F')
-    return dict(id='1-3', name='무지개 협곡', theme='canyon', time=340, rows=g.rows())
+    return dict(id='1-3', name='무지개 협곡', theme='canyon', time=340,
+                rows=g.rows(), bonus=bonus_room('heart'))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -383,9 +395,11 @@ def level_1_4():
     g.put(187, 9, 'o')
     g.put(191, 12, 'm')
 
+    g.pipe(166, 11, 2)
     g.rect(194, 11, 6, 2, '#')
     g.put(197, 10, 'F')
-    return dict(id='1-4', name='제로 동굴', theme='cave', time=360, rows=g.rows())
+    return dict(id='1-4', name='제로 동굴', theme='cave', time=360,
+                rows=g.rows(), bonus=bonus_room('coins'))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -410,12 +424,42 @@ def level_1_5():
     g.put(24, 7, 'o')
     g.put(27, 7, 'o')
     g.put(25, 11, 'Z')
-    return dict(id='1-5', name='제로의 탑', theme='tower', time=400, rows=g.rows())
+    return dict(id='1-5', name='제로의 탑', theme='tower', time=400, rows=g.rows(), bonus=None)
+
+
+def bonus_room(kind):
+    """파이프로 들어가는 작은 보너스 방. 왼쪽에 출구 파이프가 있다."""
+    # 화면(27칸)을 꽉 채우는 크기라야 벽 너머가 보이지 않는다
+    g = Grid(27)
+    g.rect(0, 0, 27, 3, 'S')       # 천장
+    ground(g)
+    g.vline(0, 3, 10, 'S')
+    g.vline(1, 3, 10, 'S')
+    g.vline(25, 3, 10, 'S')
+    g.vline(26, 3, 10, 'S')
+    g.pipe(3, 11, 2, 'e')          # 나가는 파이프
+    if kind == 'coins':
+        g.coins(8, 11, 5)
+        g.coins(9, 9, 4)
+        g.put(16, 11, 'o')
+        g.put(19, 11, 'o')
+        g.put(22, 11, 'o')
+    elif kind == 'orb':
+        g.coins(8, 11, 4)
+        g.put(14, 11, '+')
+        g.put(18, 11, 'o')
+        g.put(21, 11, 'o')
+    else:  # heart
+        g.coins(8, 11, 4)
+        g.put(14, 11, 'H')
+        g.put(18, 11, 'o')
+        g.put(21, 11, 'o')
+    return g.rows()
 
 
 LEVELS = [level_1_1(), level_1_2(), level_1_3(), level_1_4(), level_1_5()]
 
-SOLID = set('#BS?!')
+SOLID = set('#BS?!nwe')
 
 
 def validate(lv):
@@ -449,6 +493,8 @@ def emit():
         '  theme: string;',
         '  time: number;',
         '  rows: string[];',
+        '  /** 파이프로 들어가는 보너스 방 (없을 수도 있다) */',
+        '  bonus?: string[];',
         '}',
         '',
         'export const LEVELS: LevelDef[] = [',
@@ -464,6 +510,12 @@ def emit():
             esc = r.replace('\\', '\\\\').replace("'", "\\'")
             lines.append(f"      '{esc}',")
         lines.append('    ],')
+        if lv.get('bonus'):
+            lines.append('    bonus: [')
+            for r in lv['bonus']:
+                esc = r.replace('\\', '\\\\').replace("'", "\\'")
+                lines.append(f"      '{esc}',")
+            lines.append('    ],')
         lines.append('  },')
     lines.append('];')
     lines.append('')

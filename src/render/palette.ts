@@ -96,6 +96,14 @@ export const THEMES: Record<string, Theme> = {
     hill: '#151a2c',
     dark: true,
   },
+  bonus: {
+    skyTop: '#241a34',
+    skyBottom: '#3d2a44',
+    mountainFar: '#33253f',
+    mountainNear: '#281d33',
+    hill: '#1e1628',
+    dark: true,
+  },
   tower: {
     skyTop: '#12101f',
     skyBottom: '#3a2350',

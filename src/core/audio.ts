@@ -81,6 +81,19 @@ const TRACKS: Record<string, Track> = {
     bass: [-24, null, null, null, -24, null, null, null, -26, null, null, null, -26, null, null, null,
            -28, null, null, null, -28, null, null, null, -29, null, null, null, -29, null, null, null],
   },
+  bonus: {
+    bpm: 160,
+    leadWave: 'square',
+    bassWave: 'triangle',
+    lead: [
+      12, 16, 19, 24, 19, 16, 12, 16,
+      14, 17, 21, 26, 21, 17, 14, 17,
+      12, 16, 19, 24, 19, 16, 12, 16,
+      11, 14, 19, 23, 19, 14, 11, 14,
+    ],
+    bass: [-12, null, 0, null, -12, null, 0, null, -10, null, 2, null, -10, null, 2, null,
+           -12, null, 0, null, -12, null, 0, null, -13, null, -1, null, -13, null, -1, null],
+  },
   tower: {
     bpm: 152,
     leadWave: 'sawtooth',

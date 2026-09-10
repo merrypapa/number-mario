@@ -5,6 +5,7 @@ import { numberStats } from '../src/game/shapes';
 
 const KNOWN_CHARS = new Set([' ', '#', 'B', '?', '!', '=', '^', 'L', 'S',
   'P', 'F', 'C', 'o', '+', 'H', 'm', 'b', 'z', 'Z', 'D', 'V',
+  'n', 'w', 'e', // 파이프 몸통 / 입구 / 출구
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
 
 /** 지면 위에 서 있어야 하는 스폰 종류 */
@@ -64,7 +65,8 @@ describe('레벨 데이터 무결성', () => {
 
       it('스폰이 벽 속에 파묻혀 있지 않다', () => {
         for (const s of map.spawns) {
-          if (s.kind === 'orbblock') continue;
+          // 아이템 블록과 파이프는 타일이면서 동시에 지점이다
+          if (s.kind === 'orbblock' || s.kind === 'pipeEnter' || s.kind === 'pipeExit') continue;
           expect(isSolidAt(map, s.tx, s.ty), `${s.kind} @${s.tx},${s.ty}`).toBe(false);
         }
       });
@@ -132,4 +134,42 @@ describe('레벨 데이터 무결성', () => {
       });
     });
   }
+});
+
+describe('파이프와 보너스 방 데이터', () => {
+  it('입구 파이프가 있는 스테이지에는 보너스 방이 있고, 그 반대도 성립한다', () => {
+    for (const level of LEVELS) {
+      const map = parseLevel(level.rows);
+      const hasEntrance = map.spawns.some((s) => s.kind === 'pipeEnter');
+      expect(hasEntrance, `${level.id}`).toBe(Boolean(level.bonus));
+    }
+  });
+
+  it('보너스 방에는 나가는 파이프가 정확히 하나 있다', () => {
+    for (const level of LEVELS) {
+      if (!level.bonus) continue;
+      const room = parseLevel(level.bonus);
+      const exits = room.spawns.filter((s) => s.kind === 'pipeExit');
+      expect(exits.length, `${level.id} 보너스 방`).toBe(1);
+      // 보너스 방에는 들어가는 파이프가 없어야 한다(무한 루프 방지)
+      expect(room.spawns.some((s) => s.kind === 'pipeEnter')).toBe(false);
+    }
+  });
+
+  it('보너스 방은 사방이 막혀 있어 떨어져 죽지 않는다', () => {
+    for (const level of LEVELS) {
+      if (!level.bonus) continue;
+      const room = parseLevel(level.bonus);
+      for (let tx = 0; tx < room.w; tx++) {
+        let floor = false;
+        for (let ty = 0; ty < room.h; ty++) {
+          if (isSolidAt(room, tx, ty)) {
+            floor = true;
+            break;
+          }
+        }
+        expect(floor, `${level.id} 보너스 방 ${tx}번 칸에 바닥 없음`).toBe(true);
+      }
+    }
+  });
 });

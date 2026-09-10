@@ -6,6 +6,7 @@ import { COLORS, NUMBER_COLORS, RAINBOW } from '../render/palette';
 import { drawCube, drawEyes, drawStarShape, drawText, roundRect, type Ctx } from '../render/sprites';
 import type { ClearSummary } from '../game/scoring';
 import { ENDING_LINES, PROLOGUE, stageStory } from '../game/story';
+import { formatDuration, summarize, type RunRecord } from '../game/records';
 
 export interface Menu {
   items: string[];
@@ -256,6 +257,75 @@ export function drawEnding(ctx: Ctx, totalScore: number, time: number): void {
   drawText(ctx, `최종 점수  ${formatScore(totalScore)}`, cx, VIEW_H - 26, 14, '#8fe07f', 'center');
   if (Math.floor(time * 2) % 2 === 0) {
     drawText(ctx, '아무 키나 눌러 타이틀로', cx, VIEW_H - 8, 10, '#8fa0c0', 'center');
+  }
+}
+
+/** 누적 기록 화면 */
+export function drawRecords(ctx: Ctx, records: RunRecord[], scroll: number, time: number): void {
+  ctx.fillStyle = '#101527';
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  const cx = VIEW_W / 2;
+  drawText(ctx, '명예의 전당', cx, 34, 22, '#ffd84d', 'center');
+
+  const stats = summarize(records);
+  drawText(
+    ctx,
+    `완주 ${stats.runs}회   ·   최고 ${formatScore(stats.bestScore)}   ·   최단 ${
+      stats.runs ? formatDuration(stats.bestSeconds) : '-'
+    }   ·   모은 코인 ${stats.totalCoins}`,
+    cx,
+    54,
+    10.5,
+    '#8fa0c0',
+    'center',
+  );
+
+  if (records.length === 0) {
+    drawText(ctx, '아직 완주 기록이 없어요.', cx, 160, 15, '#cfd6e4', 'center');
+    drawText(ctx, '제로의 탑까지 깨면 이름을 남길 수 있어요!', cx, 186, 12, '#8fa0c0', 'center');
+  } else {
+    const rows = 8;
+    const top = Math.max(0, Math.min(scroll, records.length - rows));
+    // 표 머리
+    drawText(ctx, '순위', 44, 80, 10, '#8fa0c0', 'center');
+    drawText(ctx, '이름', 76, 80, 10, '#8fa0c0', 'left');
+    drawText(ctx, '점수', 330, 80, 10, '#8fa0c0', 'right');
+    drawText(ctx, '시간', 400, 80, 10, '#8fa0c0', 'right');
+    drawText(ctx, '숫자', 460, 80, 10, '#8fa0c0', 'right');
+    drawText(ctx, '코인', 520, 80, 10, '#8fa0c0', 'right');
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(32, 86);
+    ctx.lineTo(VIEW_W - 32, 86);
+    ctx.stroke();
+
+    for (let i = 0; i < Math.min(rows, records.length - top); i++) {
+      const r = records[top + i];
+      const rank = top + i + 1;
+      const y = 106 + i * 26;
+      if (rank <= 3) {
+        ctx.fillStyle = ['rgba(255,216,77,0.14)', 'rgba(207,214,228,0.12)', 'rgba(201,119,60,0.14)'][rank - 1];
+        roundRect(ctx, 32, y - 15, VIEW_W - 64, 22, 5);
+        ctx.fill();
+      }
+      const medal = ['#ffd84d', '#cfd6e4', '#c9773c'][rank - 1] ?? '#8fa0c0';
+      drawText(ctx, String(rank), 44, y, 12, medal, 'center');
+      drawText(ctx, r.name, 76, y, 12, '#ffffff', 'left');
+      drawText(ctx, formatScore(r.score), 330, y, 12, '#ffe98a', 'right');
+      drawText(ctx, formatDuration(r.seconds), 400, y, 11, '#cfd6e4', 'right');
+      const c = NUMBER_COLORS[r.bestNumber] ?? NUMBER_COLORS[1];
+      drawText(ctx, String(r.bestNumber), 460, y, 12, c.light, 'right');
+      drawText(ctx, String(r.coins), 520, y, 11, '#cfd6e4', 'right');
+      if (r.assisted) drawText(ctx, '도움', 566, y, 9.5, '#8fe07f', 'right');
+    }
+    if (records.length > rows) {
+      drawText(ctx, `▲ ▼ 로 넘기기  (${top + 1}~${top + Math.min(rows, records.length - top)} / ${records.length})`,
+        cx, VIEW_H - 30, 10, '#6d7ea0', 'center');
+    }
+  }
+
+  if (Math.floor(time * 2) % 2 === 0) {
+    drawText(ctx, '▲ 눌러 타이틀로', cx, VIEW_H - 12, 11, '#8fa0c0', 'center');
   }
 }
 

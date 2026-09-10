@@ -129,6 +129,53 @@ function drawLavaTile(ctx: Ctx, x: number, y: number, time: number, surface: boo
   ctx.fillRect(x, y + TILE - 6, TILE, 6);
 }
 
+/** 초록 파이프 — 이웃 칸을 보고 테두리와 입구 턱을 그린다 */
+function drawPipeTile(ctx: Ctx, x: number, y: number, map: World['map'], tx: number, ty: number): void {
+  const isPipe = (ax: number, ay: number) => getTile(map, ax, ay) === Tile.Pipe;
+  const openTop = !isPipe(tx, ty - 1);
+  const openLeft = !isPipe(tx - 1, ty);
+  const openRight = !isPipe(tx + 1, ty);
+
+  ctx.fillStyle = '#3fae3a';
+  ctx.fillRect(x, y, TILE, TILE);
+  // 왼쪽 하이라이트 / 오른쪽 음영
+  ctx.fillStyle = '#7fd772';
+  ctx.fillRect(x + (openLeft ? 3 : 0), y, 5, TILE);
+  ctx.fillStyle = '#237a22';
+  ctx.fillRect(x + TILE - (openRight ? 6 : 3), y, 4, TILE);
+  if (openLeft) {
+    ctx.fillStyle = COLORS.outline;
+    ctx.fillRect(x, y, 2, TILE);
+  }
+  if (openRight) {
+    ctx.fillStyle = COLORS.outline;
+    ctx.fillRect(x + TILE - 2, y, 2, TILE);
+  }
+
+  if (openTop) {
+    // 입구 턱은 몸통보다 살짝 넓다
+    const lipX = x - (openLeft ? 3 : 0);
+    const lipW = TILE + (openLeft ? 3 : 0) + (openRight ? 3 : 0);
+    ctx.fillStyle = '#4fc247';
+    ctx.fillRect(lipX, y, lipW, 9);
+    ctx.fillStyle = '#8fe07f';
+    ctx.fillRect(lipX, y + 1, lipW, 3);
+    ctx.fillStyle = '#237a22';
+    ctx.fillRect(lipX, y + 8, lipW, 2);
+    ctx.strokeStyle = COLORS.outline;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(lipX + 1, y + 1, lipW - 2, 9);
+    // 안쪽 어둠
+    if (openLeft) {
+      ctx.fillStyle = '#12331a';
+      ctx.fillRect(x + 3, y + 10, TILE - 3, 4);
+    } else if (openRight) {
+      ctx.fillStyle = '#12331a';
+      ctx.fillRect(x, y + 10, TILE - 3, 4);
+    }
+  }
+}
+
 /** 어린이 모드 도우미 — 낭떠러지 위에 놓이는 사다리 다리 */
 function drawKidBridgeTile(ctx: Ctx, x: number, y: number, time: number): void {
   ctx.fillStyle = '#e0b070';
@@ -204,6 +251,9 @@ export function drawTiles(ctx: Ctx, world: World, time: number, dark: boolean): 
           break;
         case Tile.KidBridge:
           drawKidBridgeTile(ctx, x, y, time);
+          break;
+        case Tile.Pipe:
+          drawPipeTile(ctx, x, y, map, tx, ty);
           break;
         default:
           break;
@@ -580,11 +630,16 @@ export function drawItem(ctx: Ctx, item: Item, time: number): void {
 /* ── 월드 전체 ────────────────────────────────────────── */
 
 export function drawWorld(ctx: Ctx, world: World, time: number): void {
-  const theme = THEMES[world.level.theme] ?? THEMES.field;
-  drawBackground(ctx, world.level.theme, world.camera.offsetX, world.camera.offsetY, world.map.w * TILE, time);
+  // 보너스 방은 지하이므로 스테이지 테마 대신 전용 배경을 쓴다
+  const themeKey = world.inBonus ? 'bonus' : world.level.theme;
+  const theme = THEMES[themeKey] ?? THEMES.field;
+  drawBackground(ctx, themeKey, world.camera.offsetX, world.camera.offsetY, world.map.w * TILE, time);
 
   ctx.save();
   ctx.translate(-world.camera.offsetX, -world.camera.offsetY);
+
+  const enteringPipe = world.pipeAnim !== null;
+  if (enteringPipe) drawPlayer(ctx, world.player, time, world.magicNumber);
 
   drawTiles(ctx, world, time, theme.dark);
 
@@ -634,7 +689,7 @@ export function drawWorld(ctx: Ctx, world: World, time: number): void {
     ctx.restore();
   }
 
-  if (!world.player.dead || world.player.deadTimer < 2) {
+  if (!enteringPipe && (!world.player.dead || world.player.deadTimer < 2)) {
     drawPlayer(ctx, world.player, time, world.magicNumber);
   }
 
@@ -660,7 +715,7 @@ export function drawWorld(ctx: Ctx, world: World, time: number): void {
 
   drawVignette(
     ctx,
-    world.level.theme,
+    themeKey,
     world.player.centerX - world.camera.offsetX,
     world.player.centerY - world.camera.offsetY,
   );

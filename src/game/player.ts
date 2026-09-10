@@ -272,6 +272,9 @@ export class Player {
     if (this.rollTime > 0 || this.dashTime > 0) dir = this.facing;
     if (dir !== 0) this.facing = dir > 0 ? 1 : -1;
 
+    /* 파이프(하수구)로 들어가기 — 발밑에 파이프가 있을 때 아래 키 */
+    if (input.justPressed('down') && this.onGround && this.world.tryPipe(this)) return;
+
     /* 수평 이동 */
     let maxSpeed = stats.moveSpeed;
     if (this.superTime > 0) maxSpeed *= SUPER_SPEED_MULT;

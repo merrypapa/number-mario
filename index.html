@@ -165,6 +165,54 @@
         background: rgba(16, 20, 34, 0.62);
         box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 3px 8px rgba(0, 0, 0, 0.4);
       }
+      /* 기록 등록 창 */
+      #nameentry {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(6, 9, 18, 0.72);
+      }
+      #nameentry[hidden] { display: none; }
+      .ne-card {
+        width: min(340px, 86vw);
+        padding: 20px;
+        border-radius: 14px;
+        background: linear-gradient(165deg, #1b2340, #121828);
+        border: 2px solid rgba(255, 216, 77, 0.6);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+        text-align: center;
+      }
+      .ne-title { font-size: 17px; font-weight: bold; color: #ffd84d; margin-bottom: 4px; }
+      .ne-sub { font-size: 11px; color: #8fa0c0; margin-bottom: 14px; }
+      #ne-input {
+        width: 100%;
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 15px;
+        color: #ffffff;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.35);
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-radius: 9px;
+        touch-action: auto;
+      }
+      #ne-input:focus { outline: none; border-color: #ffd84d; }
+      .ne-row { display: flex; gap: 8px; margin-top: 14px; }
+      .ne-row button {
+        flex: 1;
+        padding: 10px 0;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: bold;
+        border: none;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      #ne-save { color: #10203a; background: linear-gradient(165deg, #ffe98a, #f2c13d); }
+      #ne-skip { color: #cfd6e4; background: rgba(255, 255, 255, 0.12); }
       /* 매직 넘버 버튼 — 데스크톱·모바일 모두 표시 */
       #helpers {
         /* HUD(위쪽)와 조이스틱/점프 버튼(좌·우 아래) 사이의 빈 공간.
@@ -207,6 +255,17 @@
   <body>
     <div id="wrap">
       <canvas id="game" width="640" height="360" aria-label="넘버런 게임 화면"></canvas>
+    </div>
+    <div id="nameentry" hidden>
+      <div class="ne-card">
+        <div class="ne-title">🏆 완주 기록 등록</div>
+        <div class="ne-sub">이름을 남기면 명예의 전당에 저장돼요</div>
+        <input id="ne-input" type="text" maxlength="10" placeholder="이름" autocomplete="off" />
+        <div class="ne-row">
+          <button id="ne-save" type="button">등록</button>
+          <button id="ne-skip" type="button">건너뛰기</button>
+        </div>
+      </div>
     </div>
     <div id="helpers">
       <button id="btn-magic" type="button" aria-pressed="false" title="매직 넘버 (M) — 무적">✨ 매직 넘버</button>

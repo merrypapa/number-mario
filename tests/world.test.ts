@@ -707,3 +707,128 @@ describe('밟기 판정', () => {
     expect(world.player.number).toBeLessThan(6);
   });
 });
+
+describe('파이프(하수구)와 보너스 방', () => {
+  async function realWorld(index: number) {
+    const { LEVELS } = await import('../src/game/levels/data');
+    const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+    const world = new World(events);
+    world.load(LEVELS[index], index, false);
+    return world;
+  }
+
+  /** 플레이어를 파이프 윗면에 세운다 */
+  function standOnPipe(world: World): { x: number; y: number } {
+    const pipe = world.pipes.find((p) => p.kind === 'enter')!;
+    const p = world.player;
+    p.box.x = pipe.box.x + pipe.box.w / 2 - p.box.w / 2;
+    p.box.y = pipe.box.y + 2 - p.box.h;
+    p.vx = 0;
+    p.vy = 0;
+    return { x: p.centerX, y: p.box.y + p.box.h };
+  }
+
+  it('1-4 를 뺀 스테이지마다 들어갈 파이프와 보너스 방이 있다', async () => {
+    const { LEVELS } = await import('../src/game/levels/data');
+    for (const level of LEVELS.slice(0, 4)) {
+      expect(level.bonus, `${level.id} 보너스 방 없음`).toBeDefined();
+      const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+      const w = new World(events);
+      w.load(level, 0, false);
+      expect(w.pipes.some((p) => p.kind === 'enter'), `${level.id} 입구 파이프 없음`).toBe(true);
+    }
+  });
+
+  it('보너스 방에는 반드시 나가는 파이프가 있다', async () => {
+    const { LEVELS } = await import('../src/game/levels/data');
+    for (const level of LEVELS.slice(0, 4)) {
+      const events = { onLevelClear: vi.fn(), onGameOver: vi.fn(), onLifeLost: vi.fn() };
+      const w = new World(events);
+      w.load(level, 0, false);
+      const input = new Input();
+      step(w, input, 5);
+      standOnPipe(w);
+      input.press('down');
+      step(w, input, 90);
+      expect(w.inBonus, `${level.id} 보너스 방 진입 실패`).toBe(true);
+      expect(w.pipes.some((p) => p.kind === 'exit'), `${level.id} 출구 파이프 없음`).toBe(true);
+    }
+  });
+
+  it('아래를 눌러 파이프로 들어가고 다시 나올 수 있다', async () => {
+    const world = await realWorld(0);
+    const input = new Input();
+    step(world, input, 5);
+    const entry = standOnPipe(world);
+    expect(world.inBonus).toBe(false);
+
+    input.press('down');
+    step(world, input, 90); // 내려가는 연출 + 올라오는 연출
+    input.release('down');
+    expect(world.inBonus).toBe(true);
+    expect(world.player.dead).toBe(false);
+
+    // 보너스 방의 나가는 파이프로 되돌아온다
+    const exit = world.pipes.find((p) => p.kind === 'exit')!;
+    const p = world.player;
+    p.box.x = exit.box.x + exit.box.w / 2 - p.box.w / 2;
+    p.box.y = exit.box.y + 2 - p.box.h;
+    p.vx = 0;
+    p.vy = 0;
+    step(world, input, 5);
+    input.press('down');
+    step(world, input, 90);
+    expect(world.inBonus).toBe(false);
+    // 들어갔던 자리 근처로 돌아온다
+    expect(Math.abs(world.player.centerX - entry.x)).toBeLessThan(3 * TILE);
+  });
+
+  it('보너스 방에서 모은 코인은 나와도 남는다', async () => {
+    const world = await realWorld(0);
+    const input = new Input();
+    step(world, input, 5);
+    standOnPipe(world);
+    input.press('down');
+    step(world, input, 90);
+    input.release('down');
+    expect(world.inBonus).toBe(true);
+
+    const before = world.coins;
+    // 방 안의 코인을 직접 주워 본다
+    const coin = world.items.find((i) => i.kind === 'coin')!;
+    world.player.box.x = coin.box.x;
+    world.player.box.y = coin.box.y;
+    step(world, input, 3);
+    expect(world.coins).toBe(before + 1);
+
+    const exit = world.pipes.find((p) => p.kind === 'exit')!;
+    world.player.box.x = exit.box.x + TILE - world.player.box.w / 2;
+    world.player.box.y = exit.box.y + 2 - world.player.box.h;
+    world.player.vy = 0;
+    step(world, input, 5);
+    input.press('down');
+    step(world, input, 90);
+    expect(world.inBonus).toBe(false);
+    expect(world.coins).toBe(before + 1); // 나와도 그대로
+  });
+
+  it('본 스테이지에서 모은 코인은 보너스 방에 들어가도 유지된다', async () => {
+    const world = await realWorld(0);
+    const input = new Input();
+    step(world, input, 5);
+    world.coins = 7;
+    world.score = 700;
+    standOnPipe(world);
+    input.press('down');
+    step(world, input, 90);
+    expect(world.inBonus).toBe(true);
+    expect(world.coins).toBe(7);
+    expect(world.score).toBe(700);
+  });
+
+  it('보너스 방이 없는 보스 스테이지에서는 파이프가 없다', async () => {
+    const world = await realWorld(4);
+    expect(world.level.bonus).toBeUndefined();
+    expect(world.pipes.length).toBe(0);
+  });
+});

@@ -50,6 +50,25 @@ export interface WorldEvents {
   onLifeLost(): void;
 }
 
+/** 파이프 입·출구 */
+export interface PipeSpot {
+  kind: 'enter' | 'exit';
+  box: Box;
+}
+
+/** 한 구역의 내용물 */
+interface AreaState {
+  map: TileMap;
+  enemies: Enemy[];
+  items: Item[];
+  platforms: MovingPlatform[];
+  pipes: PipeSpot[];
+  orbBlocks: Set<number>;
+  boss: MrZero | null;
+  spawnX: number;
+  spawnY: number;
+}
+
 interface RainbowTile {
   tx: number;
   ty: number;
@@ -70,6 +89,17 @@ export class World {
   fallingBlocks: FallingBlock[] = [];
   rainbow: RainbowTile[] = [];
   boss: MrZero | null = null;
+  /** 현재 구역의 파이프 목록 */
+  pipes: PipeSpot[] = [];
+  /** 보너스 방에 들어와 있는가 */
+  inBonus = false;
+  /** 파이프 이동 연출 */
+  pipeAnim: { t: number; phase: 'down' | 'up'; target: 'bonus' | 'main' } | null = null;
+  private savedArea: { area: AreaState; returnX: number; returnY: number } | null = null;
+  /** 이번 판의 실제 플레이 시간(초) */
+  playSeconds = 0;
+  /** 이번 판에서 도달한 가장 큰 숫자 */
+  bestNumber = 1;
 
   level!: LevelDef;
   levelIndex = 0;
@@ -106,19 +136,103 @@ export class World {
 
   /* ── 로딩 ─────────────────────────────────────────── */
 
+  /** 한 구역(본 스테이지 또는 보너스 방)을 구성한 결과 */
+  private buildArea(rows: readonly string[]): AreaState {
+    const map = parseLevel(rows);
+    const area: AreaState = {
+      map,
+      enemies: [],
+      items: [],
+      platforms: [],
+      pipes: [],
+      orbBlocks: new Set<number>(),
+      boss: null,
+      spawnX: TILE * 2,
+      spawnY: TILE * 2,
+    };
+
+    for (const s of map.spawns) {
+      const x = s.tx * TILE;
+      const y = s.ty * TILE;
+      switch (s.kind) {
+        case 'player':
+          area.spawnX = x + TILE / 2;
+          area.spawnY = y + TILE;
+          break;
+        case 'coin':
+        case 'orb':
+        case 'heart':
+        case 'checkpoint':
+        case 'goal':
+          area.items.push(makeItem(s.kind, s.tx, s.ty));
+          break;
+        case 'numberpad':
+          area.items.push(makeItem('numberpad', s.tx, s.ty, s.value ?? 1));
+          break;
+        case 'orbblock':
+          area.orbBlocks.add(this.tileKey(s.tx, s.ty));
+          break;
+        case 'minusbug':
+          area.enemies.push(new MinusBug(x, y + TILE * 0.25));
+          break;
+        case 'divbat':
+          area.enemies.push(new DivBat(x, y));
+          break;
+        case 'zeroslime':
+          area.enemies.push(new ZeroSlime(x, y));
+          break;
+        case 'boss': {
+          const boss = new MrZero(x, y - TILE * 1.5);
+          area.boss = boss;
+          area.enemies.push(boss);
+          break;
+        }
+        case 'platformH':
+          area.platforms.push(makePlatform(s.tx, s.ty, 'x'));
+          break;
+        case 'platformV':
+          area.platforms.push(makePlatform(s.tx, s.ty, 'y'));
+          break;
+        case 'pipeEnter':
+        case 'pipeExit':
+          // 파이프는 2칸 폭이며, 윗면을 밟고 아래를 눌러 드나든다
+          area.pipes.push({
+            kind: s.kind === 'pipeEnter' ? 'enter' : 'exit',
+            box: { x, y: y - 2, w: TILE * 2, h: 8 },
+          });
+          break;
+        default:
+          break;
+      }
+    }
+    return area;
+  }
+
+  /** 만들어 둔 구역을 실제로 적용한다 */
+  private applyArea(area: AreaState): void {
+    this.map = area.map;
+    this.enemies = area.enemies;
+    this.items = area.items;
+    this.platforms = area.platforms;
+    this.pipes = area.pipes;
+    this.orbBlocks = area.orbBlocks;
+    this.boss = area.boss;
+    this.stars = [];
+    this.fallingBlocks = [];
+    this.rainbow = [];
+    this.camera.setWorld(area.map.w * TILE, area.map.h * TILE);
+  }
+
   load(level: LevelDef, index: number, keepProgress = false): void {
     this.level = level;
     this.levelIndex = index;
-    this.map = parseLevel(level.rows);
-    this.camera.setWorld(this.map.w * TILE, this.map.h * TILE);
-    this.enemies = [];
-    this.items = [];
-    this.stars = [];
-    this.platforms = [];
-    this.fallingBlocks = [];
-    this.rainbow = [];
-    this.boss = null;
-    this.orbBlocks.clear();
+    const area = this.buildArea(level.rows);
+    this.applyArea(area);
+    this.spawnX = area.spawnX;
+    this.spawnY = area.spawnY;
+    this.savedArea = null;
+    this.inBonus = false;
+    this.pipeAnim = null;
     this.particles.clear();
     this.cleared = false;
     this.goalTouchedAt = -1;
@@ -131,55 +245,10 @@ export class World {
       this.deaths = 0;
       this.lives = this.kidMode ? KID_LIVES : DEFAULT_LIVES;
       this.seenNumbers.clear();
+      this.playSeconds = 0;
+      this.bestNumber = 1;
     }
     this.numberBanner = null;
-
-    for (const s of this.map.spawns) {
-      const x = s.tx * TILE;
-      const y = s.ty * TILE;
-      switch (s.kind) {
-        case 'player':
-          this.spawnX = x + TILE / 2;
-          this.spawnY = y + TILE;
-          break;
-        case 'coin':
-        case 'orb':
-        case 'heart':
-        case 'checkpoint':
-        case 'goal':
-          this.items.push(makeItem(s.kind, s.tx, s.ty));
-          break;
-        case 'numberpad':
-          this.items.push(makeItem('numberpad', s.tx, s.ty, s.value ?? 1));
-          break;
-        case 'orbblock':
-          this.orbBlocks.add(this.tileKey(s.tx, s.ty));
-          break;
-        case 'minusbug':
-          this.enemies.push(new MinusBug(x, y + TILE * 0.25));
-          break;
-        case 'divbat':
-          this.enemies.push(new DivBat(x, y));
-          break;
-        case 'zeroslime':
-          this.enemies.push(new ZeroSlime(x, y));
-          break;
-        case 'boss': {
-          const boss = new MrZero(x, y - TILE * 1.5);
-          this.boss = boss;
-          this.enemies.push(boss);
-          break;
-        }
-        case 'platformH':
-          this.platforms.push(makePlatform(s.tx, s.ty, 'x'));
-          break;
-        case 'platformV':
-          this.platforms.push(makePlatform(s.tx, s.ty, 'y'));
-          break;
-        default:
-          break;
-      }
-    }
 
     if (this.kidMode) this.buildKidBridges();
 
@@ -189,6 +258,109 @@ export class World {
     this.notifyNumberReached(1);
     this.camera.follow(this.player.centerX, this.player.centerY, 1, true);
     this.audio.startMusic(level.theme);
+  }
+
+  /* ── 파이프(하수구) ──────────────────────────────── */
+
+  /** 발밑에 드나들 수 있는 파이프가 있으면 이동을 시작한다 */
+  tryPipe(player: Player): boolean {
+    if (this.pipeAnim || this.cleared || player.dead) return false;
+    const feet: Box = { x: player.box.x + 2, y: player.box.y + player.box.h - 6, w: player.box.w - 4, h: 10 };
+    for (const pipe of this.pipes) {
+      if (!overlaps(feet, pipe.box)) continue;
+      if (pipe.kind === 'enter' && !this.inBonus && this.level.bonus) {
+        this.startPipe('bonus');
+        return true;
+      }
+      if (pipe.kind === 'exit' && this.inBonus) {
+        this.startPipe('main');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private startPipe(target: 'bonus' | 'main'): void {
+    this.pipeAnim = { t: 0, phase: 'down', target };
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.audio.play('skill', -8);
+    this.particles.dust(this.player.centerX, this.player.box.y + this.player.box.h, 8);
+  }
+
+  /** 파이프 애니메이션 진행. 처리했으면 true */
+  private updatePipe(dt: number): boolean {
+    const anim = this.pipeAnim;
+    if (!anim) return false;
+    anim.t += dt;
+    const SPEED = 70;
+    if (anim.phase === 'down') {
+      this.player.box.y += SPEED * dt;
+      if (anim.t >= 0.55) {
+        this.swapArea(anim.target);
+        this.pipeAnim = { t: 0, phase: 'up', target: anim.target };
+      }
+    } else {
+      this.player.box.y -= SPEED * dt;
+      if (anim.t >= 0.5) {
+        this.pipeAnim = null;
+        this.player.vy = 0;
+      }
+    }
+    this.particles.update(dt);
+    this.camera.follow(this.player.centerX, this.player.centerY, dt, anim.phase === 'up' && anim.t < 0.05);
+    return true;
+  }
+
+  private swapArea(target: 'bonus' | 'main'): void {
+    if (target === 'bonus') {
+      const rows = this.level.bonus;
+      if (!rows) return;
+      this.savedArea = {
+        area: {
+          map: this.map,
+          enemies: this.enemies,
+          items: this.items,
+          platforms: this.platforms,
+          pipes: this.pipes,
+          orbBlocks: this.orbBlocks,
+          boss: this.boss,
+          spawnX: this.spawnX,
+          spawnY: this.spawnY,
+        },
+        returnX: this.player.centerX,
+        returnY: this.player.box.y + this.player.box.h,
+      };
+      const bonus = this.buildArea(rows);
+      this.applyArea(bonus);
+      this.inBonus = true;
+      // 나가는 파이프 위에서 솟아오른다
+      const exit = bonus.pipes.find((p) => p.kind === 'exit');
+      const x = exit ? exit.box.x + TILE : bonus.spawnX;
+      const y = exit ? exit.box.y + 2 : bonus.spawnY;
+      this.placePlayer(x, y);
+      this.audio.startMusic('bonus');
+    } else {
+      const saved = this.savedArea;
+      if (!saved) return;
+      this.applyArea(saved.area);
+      this.spawnX = saved.area.spawnX;
+      this.spawnY = saved.area.spawnY;
+      this.inBonus = false;
+      this.savedArea = null;
+      this.placePlayer(saved.returnX, saved.returnY);
+      this.audio.startMusic(this.level.theme);
+    }
+    this.lastSafeX = this.player.centerX;
+    this.lastSafeY = this.player.box.y + this.player.box.h;
+  }
+
+  private placePlayer(centerX: number, bottomY: number): void {
+    this.player.box.x = centerX - this.player.box.w / 2;
+    this.player.box.y = bottomY - this.player.box.h;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.camera.follow(this.player.centerX, this.player.centerY, 1, true);
   }
 
   /**
@@ -229,6 +401,11 @@ export class World {
     }
   }
 
+  /** 게임 오버 뒤 재시도할 때 라이프를 되돌린다 */
+  resetLives(): void {
+    this.lives = this.kidMode ? KID_LIVES : DEFAULT_LIVES;
+  }
+
   /** 그 숫자가 처음이면 문장을 띄운다 */
   notifyNumberReached(n: number): void {
     if (this.seenNumbers.has(n) || !numberLine(n)) return;
@@ -253,6 +430,9 @@ export class World {
 
   update(dt: number, input: Input): void {
     this.elapsed += dt;
+    this.playSeconds += dt;
+    this.bestNumber = Math.max(this.bestNumber, this.player.number);
+    if (this.updatePipe(dt)) return;
     if (this.numberBanner) {
       this.numberBanner.time += dt;
       if (this.numberBanner.time > NUMBER_BANNER_TIME) this.numberBanner = null;

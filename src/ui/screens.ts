@@ -5,6 +5,7 @@ import { shapeOf } from '../game/shapes';
 import { COLORS, NUMBER_COLORS, RAINBOW } from '../render/palette';
 import { drawCube, drawEyes, drawStarShape, drawText, roundRect, type Ctx } from '../render/sprites';
 import type { ClearSummary } from '../game/scoring';
+import { ENDING_LINES, PROLOGUE, stageStory } from '../game/story';
 
 export interface Menu {
   items: string[];
@@ -107,45 +108,23 @@ export function drawTitle(ctx: Ctx, menu: Menu, time: number, best: number): voi
   drawText(ctx, '방향키 이동 · Z/Space 점프 · X 스킬', cx, VIEW_H - 14, 10, '#6d7ea0', 'center');
 }
 
-const STORY_PAGES: { title: string; lines: string[] }[] = [
-  {
-    title: '카운트랜드',
-    lines: [
-      '모든 것이 블록으로 이루어진 나라, 카운트랜드.',
-      '주민들은 블록을 하나씩 쌓아 올리며 자랍니다.',
-      '하나면 원, 둘이면 투, 열이면 텐.',
-    ],
-  },
-  {
-    title: '아무것도 아닌 자',
-    lines: [
-      '어느 날 하늘에 아무것도 없는 구멍이 열렸습니다.',
-      '"숫자는 시끄러워. 전부 0으로 만들어 줄게."',
-      '미스터 제로가 카운트 크리스탈을 삼켜 버렸습니다.',
-    ],
-  },
-  {
-    title: '마지막 하나',
-    lines: [
-      '주민들의 블록이 하나씩 사라지고',
-      '마지막에 남은 것은 블록 단 하나, 바로 당신.',
-      '플러스 오브를 모아 다시 자라나세요!',
-    ],
-  },
-];
-
-export const STORY_PAGE_COUNT = STORY_PAGES.length;
+export const STORY_PAGE_COUNT = PROLOGUE.length;
 
 export function drawStory(ctx: Ctx, page: number, time: number): void {
   ctx.fillStyle = '#101527';
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  const p = STORY_PAGES[Math.min(page, STORY_PAGES.length - 1)];
+  const p = PROLOGUE[Math.min(page, PROLOGUE.length - 1)];
   const cx = VIEW_W / 2;
-  drawText(ctx, p.title, cx, 92, 26, '#ffd84d', 'center');
+  drawText(ctx, p.title, cx, 78, 25, '#ffd84d', 'center');
   p.lines.forEach((line, i) => {
-    drawText(ctx, line, cx, 148 + i * 30, 14, '#e6ecf7', 'center');
+    // 한 줄씩 차례로 나타난다
+    const appear = time * 2.2 - i * 0.45;
+    if (appear <= 0) return;
+    ctx.globalAlpha = Math.min(1, appear);
+    drawText(ctx, line, cx, 124 + i * 27, 13.5, '#e6ecf7', 'center');
+    ctx.globalAlpha = 1;
   });
-  drawMiniChar(ctx, page + 1, cx, 268, 15, time);
+  drawMiniChar(ctx, Math.min(10, page + 1), cx, 282, 14, time);
   if (Math.floor(time * 2) % 2 === 0) {
     drawText(ctx, '아무 키나 눌러 계속', cx, VIEW_H - 24, 11, '#8fa0c0', 'center');
   }
@@ -201,7 +180,14 @@ export function drawPause(
   );
 }
 
-export function drawClear(ctx: Ctx, summary: ClearSummary, levelName: string, time: number, last: boolean): void {
+export function drawClear(
+  ctx: Ctx,
+  summary: ClearSummary,
+  levelName: string,
+  time: number,
+  last: boolean,
+  levelId = '',
+): void {
   dim(ctx, 0.78);
   const cx = VIEW_W / 2;
   ctx.save();
@@ -214,8 +200,10 @@ export function drawClear(ctx: Ctx, summary: ClearSummary, levelName: string, ti
   ctx.stroke();
   ctx.restore();
 
-  drawText(ctx, '스테이지 클리어!', cx, 120, 26, '#ffd84d', 'center');
-  drawText(ctx, levelName, cx, 144, 13, '#cfd6e4', 'center');
+  drawText(ctx, '스테이지 클리어!', cx, 116, 25, '#ffd84d', 'center');
+  drawText(ctx, levelName, cx, 138, 12, '#cfd6e4', 'center');
+  const story = stageStory(levelId);
+  if (story) drawText(ctx, story.clear, cx, 160, 12, '#8fe07f', 'center');
 
   const rows: [string, number][] = [
     ['점수', summary.base],
@@ -223,16 +211,16 @@ export function drawClear(ctx: Ctx, summary: ClearSummary, levelName: string, ti
     ['무사통과 보너스', summary.noDeathBonus],
   ];
   rows.forEach(([label, value], i) => {
-    drawText(ctx, label, cx - 110, 184 + i * 22, 13, '#cfd6e4', 'left');
-    drawText(ctx, formatScore(value), cx + 110, 184 + i * 22, 13, '#ffffff', 'right');
+    drawText(ctx, label, cx - 110, 192 + i * 22, 13, '#cfd6e4', 'left');
+    drawText(ctx, formatScore(value), cx + 110, 192 + i * 22, 13, '#ffffff', 'right');
   });
   ctx.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx.beginPath();
-  ctx.moveTo(cx - 110, 258);
-  ctx.lineTo(cx + 110, 258);
+  ctx.moveTo(cx - 110, 266);
+  ctx.lineTo(cx + 110, 266);
   ctx.stroke();
-  drawText(ctx, '합계', cx - 110, 278, 15, '#ffd84d', 'left');
-  drawText(ctx, formatScore(summary.total), cx + 110, 278, 15, '#ffd84d', 'right');
+  drawText(ctx, '합계', cx - 110, 286, 15, '#ffd84d', 'left');
+  drawText(ctx, formatScore(summary.total), cx + 110, 286, 15, '#ffd84d', 'right');
 
   if (Math.floor(time * 2) % 2 === 0) {
     drawText(ctx, last ? '아무 키나 눌러 결말 보기' : '아무 키나 눌러 다음 스테이지', cx, VIEW_H - 18, 12, '#8fe07f', 'center');
@@ -247,15 +235,6 @@ export function drawGameOver(ctx: Ctx, menu: Menu, time: number, score: number):
   drawMenu(ctx, menu, cx, 186, 28, time);
 }
 
-const ENDING_LINES = [
-  '텐이 제로를 세 번 내리찍자 제로가 외쳤습니다.',
-  '"나는 아무것도 아니야! 어떻게 이겨?!"',
-  '"아무것도 아닌 건 이기는 게 아니라 세는 거야."',
-  '1과 0이 나란히 서자 10이 되었습니다.',
-  '제로는 처음으로 자기 자리를 얻었습니다.',
-  '카운트랜드에 다시 숫자가 흐릅니다. 하나, 둘, 셋…',
-];
-
 export function drawEnding(ctx: Ctx, totalScore: number, time: number): void {
   ctx.fillStyle = '#0d1120';
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -266,15 +245,14 @@ export function drawEnding(ctx: Ctx, totalScore: number, time: number): void {
   }
   ctx.globalAlpha = 1;
   const cx = VIEW_W / 2;
-  drawText(ctx, '축하합니다!', cx, 48, 26, '#ffd84d', 'center');
+  drawText(ctx, '축하합니다!', cx, 34, 22, '#ffd84d', 'center');
   ENDING_LINES.forEach((line, i) => {
-    const appear = time * 1.6 - i * 0.8;
+    const appear = time * 1.2 - i * 0.7;
     if (appear <= 0) return;
     ctx.globalAlpha = Math.min(1, appear);
-    drawText(ctx, line, cx, 92 + i * 26, 12.5, '#e6ecf7', 'center');
+    drawText(ctx, line, cx, 62 + i * 22, 11.5, '#e6ecf7', 'center');
     ctx.globalAlpha = 1;
   });
-  drawMiniChar(ctx, 10, cx, 300, 14, time);
   drawText(ctx, `최종 점수  ${formatScore(totalScore)}`, cx, VIEW_H - 26, 14, '#8fe07f', 'center');
   if (Math.floor(time * 2) % 2 === 0) {
     drawText(ctx, '아무 키나 눌러 타이틀로', cx, VIEW_H - 8, 10, '#8fa0c0', 'center');

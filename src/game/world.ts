@@ -36,9 +36,12 @@ import {
 } from './items';
 import { enemyScore, SCORE_COIN, SCORE_ORB } from './scoring';
 import type { LevelDef } from './levels/data';
+import { numberLine } from './story';
 import { numberStats } from './shapes';
 
 const RAINBOW_LIFETIME = 9;
+/** 숫자 문장이 화면에 머무는 시간(초) */
+export const NUMBER_BANNER_TIME = 4.2;
 const BRIDGE_LENGTH = 3;
 
 export interface WorldEvents {
@@ -79,6 +82,10 @@ export class World {
   /** 매직 넘버: 켜져 있는 동안 무적 */
   magicNumber = false;
   cleared = false;
+  /** 이번 판에서 이미 보여 준 숫자 (문장을 한 번씩만 띄우기 위해) */
+  seenNumbers = new Set<number>();
+  /** 숫자를 처음 달성했을 때 잠시 뜨는 문장 */
+  numberBanner: { n: number; time: number } | null = null;
   /** 매직 넘버로 구조할 때 되돌아갈 마지막 안전 지점 */
   private lastSafeX = 0;
   private lastSafeY = 0;
@@ -123,7 +130,9 @@ export class World {
       this.coins = 0;
       this.deaths = 0;
       this.lives = this.kidMode ? KID_LIVES : DEFAULT_LIVES;
+      this.seenNumbers.clear();
     }
+    this.numberBanner = null;
 
     for (const s of this.map.spawns) {
       const x = s.tx * TILE;
@@ -177,6 +186,7 @@ export class World {
     this.lastSafeX = this.spawnX;
     this.lastSafeY = this.spawnY;
     this.player.spawnAt(this.spawnX, this.spawnY, 1);
+    this.notifyNumberReached(1);
     this.camera.follow(this.player.centerX, this.player.centerY, 1, true);
     this.audio.startMusic(level.theme);
   }
@@ -219,6 +229,13 @@ export class World {
     }
   }
 
+  /** 그 숫자가 처음이면 문장을 띄운다 */
+  notifyNumberReached(n: number): void {
+    if (this.seenNumbers.has(n) || !numberLine(n)) return;
+    this.seenNumbers.add(n);
+    this.numberBanner = { n, time: 0 };
+  }
+
   /** 매직 넘버 상태에서 떨어졌을 때 마지막 안전 지점으로 되돌린다 */
   rescuePlayer(): void {
     this.player.spawnAt(this.lastSafeX, this.lastSafeY, this.player.number);
@@ -236,6 +253,10 @@ export class World {
 
   update(dt: number, input: Input): void {
     this.elapsed += dt;
+    if (this.numberBanner) {
+      this.numberBanner.time += dt;
+      if (this.numberBanner.time > NUMBER_BANNER_TIME) this.numberBanner = null;
+    }
     this.camera.update(dt);
     this.particles.update(dt);
 

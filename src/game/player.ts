@@ -185,6 +185,7 @@ export class Player {
     resetSkillState(this.skill, next);
     this.morphTime = 0.35;
     if (!silent) {
+      this.world.notifyNumberReached(next);
       this.world.audio.play(grew ? 'numberUp' : 'numberDown');
       this.world.particles.burst(this.centerX, this.centerY, 12, this.world.playerColor().light);
     }

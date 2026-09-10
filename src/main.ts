@@ -2,6 +2,7 @@ import { FIXED_DT, MAX_FRAME_DT, VIEW_H, VIEW_W } from './core/constants';
 import { audio } from './core/audio';
 import { Input } from './core/input';
 import { preventBrowserGestures } from './core/touch';
+import { createJoystick } from './ui/joystick';
 import { clearSummary, type ClearSummary } from './game/scoring';
 import { LEVELS } from './game/levels/data';
 import { World } from './game/world';
@@ -141,15 +142,19 @@ class Game {
   }
 
   private bindTouch(): void {
-    const map: Record<string, Parameters<Input['setTouch']>[0]> = {
-      'btn-left': 'left',
-      'btn-right': 'right',
-      'btn-down': 'down',
+    // 방향은 조이스틱, 동작은 버튼
+    const stick = document.getElementById('stick');
+    const knob = document.getElementById('stick-knob');
+    if (stick && knob) {
+      createJoystick(stick, knob, this.input, () => audio.init());
+    }
+
+    const buttons: Record<string, Parameters<Input['setTouch']>[0]> = {
       'btn-jump': 'jump',
       'btn-skill': 'skill',
       'btn-pause': 'pause',
     };
-    for (const [id, action] of Object.entries(map)) {
+    for (const [id, action] of Object.entries(buttons)) {
       const el = document.getElementById(id);
       if (!el) continue;
       const down = (e: Event) => {
@@ -171,6 +176,7 @@ class Game {
       el.addEventListener('pointerleave', up);
       el.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
       document.body.classList.add('touch');
     }
@@ -227,6 +233,9 @@ class Game {
     this.screen = next;
     this.screenTime = 0;
     this.input.clearAll();
+    // 매직 넘버 버튼은 실제로 플레이 중일 때만 보인다
+    const playing = next === 'play' || next === 'pause' || next === 'intro';
+    document.body.classList.toggle('playing', playing);
     if (next === 'pause' || next === 'title' || next === 'gameover' || next === 'ending') {
       audio.stopMusic();
     }
@@ -482,7 +491,14 @@ class Game {
         break;
       case 'clear':
         drawWorld(ctx, this.world, this.time);
-        drawClear(ctx, this.summary, this.world.level.name, this.screenTime, this.levelIndex + 1 >= LEVELS.length);
+        drawClear(
+          ctx,
+          this.summary,
+          this.world.level.name,
+          this.screenTime,
+          this.levelIndex + 1 >= LEVELS.length,
+          this.world.level.id,
+        );
         break;
       case 'gameover':
         drawWorld(ctx, this.world, this.time);

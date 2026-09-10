@@ -1,7 +1,8 @@
 import { VIEW_W } from '../core/constants';
 import { formatScore, formatTime } from '../game/scoring';
 import { cooldownRatio, skillOf } from '../game/skills';
-import type { World } from '../game/world';
+import { NUMBER_BANNER_TIME, type World } from '../game/world';
+import { numberLine, stageStory } from '../game/story';
 import { COLORS, NUMBER_COLORS, RAINBOW } from './palette';
 import { drawHeartShape, drawText, roundRect, drawStarShape, type Ctx } from './sprites';
 
@@ -110,6 +111,60 @@ export function drawHud(ctx: Ctx, world: World, time: number): void {
     ctx.fill();
     drawText(ctx, `PHASE ${world.boss.phase}`, x + w, 66, 10, '#ffd84d', 'right');
   }
+
+  drawNumberBanner(ctx, world);
+}
+
+/**
+ * 그 숫자가 처음 되었을 때 잠깐 뜨는 문장.
+ * 하늘 쪽(위쪽 가운데)에 띄워 HUD·보스 바와 겹치지 않게 한다.
+ */
+export function drawNumberBanner(ctx: Ctx, world: World): void {
+  const banner = world.numberBanner;
+  if (!banner) return;
+  const info = numberLine(banner.n);
+  if (!info) return;
+
+  const t = banner.time;
+  const fadeIn = 0.35;
+  const fadeOut = 0.7;
+  const alpha =
+    t < fadeIn
+      ? t / fadeIn
+      : t > NUMBER_BANNER_TIME - fadeOut
+        ? Math.max(0, (NUMBER_BANNER_TIME - t) / fadeOut)
+        : 1;
+  if (alpha <= 0) return;
+
+  const color = NUMBER_COLORS[banner.n] ?? NUMBER_COLORS[1];
+  const w = 384;
+  const h = 60;
+  const x = VIEW_W / 2 - w / 2;
+  const y = 96 - (1 - alpha) * 8;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(14,18,30,0.86)';
+  roundRect(ctx, x, y, w, h, 10);
+  ctx.fill();
+  ctx.strokeStyle = color.base;
+  ctx.lineWidth = 2.5;
+  roundRect(ctx, x, y, w, h, 10);
+  ctx.stroke();
+
+  // 숫자 블록
+  ctx.fillStyle = color.base;
+  roundRect(ctx, x + 14, y + 14, 32, 32, 7);
+  ctx.fill();
+  ctx.strokeStyle = COLORS.outline;
+  ctx.lineWidth = 2;
+  roundRect(ctx, x + 14, y + 14, 32, 32, 7);
+  ctx.stroke();
+  drawText(ctx, String(banner.n), x + 30, y + 37, 18, '#ffffff', 'center');
+
+  drawText(ctx, info.name, x + 58, y + 26, 14, color.light, 'left');
+  drawText(ctx, info.line, x + 58, y + 46, 11.5, '#dfe6f2', 'left');
+  ctx.restore();
 }
 
 /** 스테이지 시작 스플래시 */
@@ -117,12 +172,19 @@ export function drawStageIntro(ctx: Ctx, world: World, t: number): void {
   ctx.fillStyle = `rgba(12,14,24,${Math.min(0.75, 1.2 - t)})`;
   ctx.fillRect(0, 0, VIEW_W, 360);
   const cx = VIEW_W / 2;
-  drawText(ctx, `스테이지 ${world.level.id}`, cx, 150, 22, '#ffd84d', 'center');
-  drawText(ctx, world.level.name, cx, 190, 30, '#ffffff', 'center');
+  drawText(ctx, `스테이지 ${world.level.id}`, cx, 140, 20, '#ffd84d', 'center');
+  drawText(ctx, world.level.name, cx, 178, 28, '#ffffff', 'center');
+  const story = stageStory(world.level.id);
+  if (story) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, t * 2 - 0.3));
+    drawText(ctx, story.open, cx, 210, 13, '#9fb0cc', 'center');
+    ctx.restore();
+  }
   ctx.save();
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = COLORS.coin;
-  drawStarShape(ctx, cx, 232, 12, t * 3);
+  drawStarShape(ctx, cx, 244, 12, t * 3);
   ctx.fill();
   ctx.restore();
 }

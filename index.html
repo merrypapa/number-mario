@@ -57,39 +57,126 @@
         pointer-events: none;
       }
       body.touch #touch { display: block; }
-      #touch .btn {
+      /* 공통 패드 */
+      #touch .pad {
         position: absolute;
         pointer-events: auto;
         display: flex;
         align-items: center;
         justify-content: center;
+        border: none;
+        padding: 0;
         border-radius: 50%;
-        background: var(--pad);
-        border: 2px solid rgba(255, 255, 255, 0.28);
-        color: #fff;
-        font-size: 22px;
-        font-weight: bold;
-        backdrop-filter: blur(2px);
+        cursor: pointer;
+        transition: transform 0.07s ease, filter 0.07s ease;
+        -webkit-tap-highlight-color: transparent;
       }
-      #touch .btn.active { background: var(--pad-active); transform: scale(0.94); }
-      #btn-left   { left: 16px;  bottom: 22px; width: 64px; height: 64px; }
-      #btn-right  { left: 92px;  bottom: 22px; width: 64px; height: 64px; }
-      #btn-down   { left: 54px;  bottom: 96px; width: 56px; height: 56px; font-size: 18px; }
-      #btn-jump   { right: 16px; bottom: 22px; width: 74px; height: 74px; }
-      #btn-skill  { right: 98px; bottom: 40px; width: 64px; height: 64px; }
-      #btn-pause  {
-        right: 14px; top: 14px; width: 40px; height: 40px;
-        font-size: 15px; border-radius: 10px;
+      #touch .pad svg { width: 56%; height: 56%; display: block; }
+      #touch .pad.active { transform: scale(0.92); filter: brightness(1.25); }
+
+      /* 점프 — 오른쪽 큰 버튼 */
+      #btn-jump {
+        right: 18px;
+        bottom: 20px;
+        width: 88px;
+        height: 88px;
+        background:
+          radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.55), transparent 52%),
+          linear-gradient(165deg, #8fe07f 0%, #57b947 55%, #2f7d25 100%);
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 0.5),
+          0 6px 14px rgba(0, 0, 0, 0.45),
+          inset 0 -5px 10px rgba(0, 0, 0, 0.28);
+      }
+      #btn-jump svg { fill: #ffffff; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
+
+      /* 스킬 — 점프 왼쪽 위 */
+      #btn-skill {
+        right: 112px;
+        bottom: 44px;
+        width: 70px;
+        height: 70px;
+        background:
+          radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.55), transparent 52%),
+          linear-gradient(165deg, #ffe98a 0%, #f2c13d 55%, #a9791a 100%);
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 0.45),
+          0 5px 12px rgba(0, 0, 0, 0.4),
+          inset 0 -4px 9px rgba(0, 0, 0, 0.25);
+      }
+      #btn-skill svg { fill: #ffffff; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.28)); }
+
+      /* 가상 조이스틱 — 왼쪽 아래 */
+      #stick {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        width: 132px;
+        height: 132px;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      #stick .stick-base {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      #stick .s-ring {
+        fill: rgba(16, 20, 34, 0.42);
+        stroke: rgba(255, 255, 255, 0.34);
+        stroke-width: 2.5;
+      }
+      #stick .s-inner {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.16);
+        stroke-width: 1.5;
+      }
+      #stick .s-tick { fill: rgba(255, 255, 255, 0.42); }
+      #stick.active .s-ring { stroke: rgba(255, 216, 77, 0.85); }
+      #stick.active .s-tick { fill: rgba(255, 216, 77, 0.9); }
+      #stick .stick-knob {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 58px;
+        height: 58px;
+        margin: 0;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        background:
+          radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.6), transparent 55%),
+          linear-gradient(165deg, #87dcff 0%, #3fb8e8 55%, #1d7ba6 100%);
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 0.5),
+          0 4px 10px rgba(0, 0, 0, 0.45),
+          inset 0 -4px 8px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+      }
+      #btn-pause {
+        right: 14px;
+        top: 14px;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: bold;
+        color: #ffffff;
+        background: rgba(16, 20, 34, 0.62);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), 0 3px 8px rgba(0, 0, 0, 0.4);
       }
       /* 매직 넘버 버튼 — 데스크톱·모바일 모두 표시 */
       #helpers {
-        /* HUD(위쪽)와 방향/점프 버튼(좌·우 아래) 사이의 빈 공간 */
+        /* HUD(위쪽)와 조이스틱/점프 버튼(좌·우 아래) 사이의 빈 공간.
+           스토리·타이틀 화면에서는 숨긴다(body.playing 일 때만 표시) */
+        display: none;
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
         bottom: 10px;
         z-index: 5;
       }
+      body.playing #helpers { display: block; }
       #btn-magic {
         font-family: inherit;
         font-size: 12px;
@@ -124,13 +211,29 @@
     <div id="helpers">
       <button id="btn-magic" type="button" aria-pressed="false" title="매직 넘버 (M) — 무적">✨ 매직 넘버</button>
     </div>
-    <div id="touch" aria-hidden="true">
-      <div class="btn" id="btn-left">◀</div>
-      <div class="btn" id="btn-right">▶</div>
-      <div class="btn" id="btn-down">▼</div>
-      <div class="btn" id="btn-jump">▲</div>
-      <div class="btn" id="btn-skill">★</div>
-      <div class="btn" id="btn-pause">❚❚</div>
+    <div id="touch">
+      <div id="stick" role="application" aria-label="이동 조이스틱">
+        <svg class="stick-base" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="s-ring" cx="50" cy="50" r="47" />
+          <circle class="s-inner" cx="50" cy="50" r="33" />
+          <path class="s-tick" d="M50 9 l6.5 10 h-13 z" />
+          <path class="s-tick" d="M50 91 l6.5 -10 h-13 z" />
+          <path class="s-tick" d="M9 50 l10 -6.5 v13 z" />
+          <path class="s-tick" d="M91 50 l-10 -6.5 v13 z" />
+        </svg>
+        <div class="stick-knob" id="stick-knob"></div>
+      </div>
+      <button class="pad" id="btn-jump" type="button" aria-label="점프">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 14 L88 56 H68 V86 H32 V56 H12 Z" />
+        </svg>
+      </button>
+      <button class="pad" id="btn-skill" type="button" aria-label="스킬">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 10 L62 40 L94 43 L70 64 L77 95 L50 78 L23 95 L30 64 L6 43 L38 40 Z" />
+        </svg>
+      </button>
+      <button class="pad" id="btn-pause" type="button" aria-label="일시정지">❚❚</button>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
